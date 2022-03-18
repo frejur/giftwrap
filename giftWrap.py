@@ -1,6 +1,6 @@
 # -*- coding: iso-8859-15 -*-
 """
-Gift Wrap Script, Fredrik Juréen 2013
+Gift Wrap Script, Fredrik Juréen 2022
 """
 import pymel.core as pm
 import maya.cmds as mc
