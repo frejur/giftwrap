@@ -2009,7 +2009,7 @@ class GiftWrap(object):
             profile = mc.circle(n=crv_suffix + self.wrap_id, sections=4, radius=r_width / 2, degree=1)[0]
             mc.xform(profile, rotation=[0, 0, 45])
             mc.makeIdentity(profile, apply=True)
-            mc.xform(profile, scale=[1, 0.1, 1])
+            mc.xform(profile, scale=[1, r_thickness, 1])
             mc.makeIdentity(profile, apply=True)
         return profile
 
