@@ -203,7 +203,7 @@ class GiftWrap(object):
 
         if not obj:
             self.wrap_gift = self.wrap_name
-            self.moveGift()
+            self.placeGift()
 
         side_a, side_d, side_e = self.getObjectSides() # bounding box
         self.fold_fix = side_d / 113 # value used to slightly offset the x value of some of the fold clusters that act up
@@ -304,12 +304,20 @@ class GiftWrap(object):
         self.animation_start = mc.getAttr(self.ctrl_handle[0] + '.animation_start')
         self.animation_end = mc.getAttr(self.ctrl_handle[0] + '.animation_end')
 
-    def moveGift(self):
+    def placeLargestSideDown(self):
         """
-        Move object to be wrapped(the gift) to the origin.
         Before wrapping we want to position the gift:
-         > The largest sides facing down/up along the y-axis
-         > The smallest sides pointing to the left/right along the x-axis
+        > The largest sides facing down/up along the y-axis
+        > The smallest sides pointing to the left/right along the x-axis
+        """
+
+    def getBoundingBox(self, coord_space):
+        obj_space = coord_space == CoordinateSpace.OBJECT
+        return
+
+    def placeGift(self):
+        """
+        Place object to be wrapped(the gift) at the origin and orient it.
         """
 
         # Store initial transform values
