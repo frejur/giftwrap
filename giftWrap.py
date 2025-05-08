@@ -9,6 +9,7 @@ import string
 import random
 import re
 import itertools
+from enum import IntEnum
 
 obj_num_min = 3
 obj_num_max = 32
@@ -16,6 +17,12 @@ obj_scale_min = 1.0
 obj_scale_max = 6.0
 
 wrap_list = []
+
+class RibbonType(IntEnum):
+    FLAT, SQUARE, ROUND = range(3)
+
+class PaperType(IntEnum):
+    FLAT, THIN_BOX = range(2)
 
 class GiftWrap(object):
     """
@@ -138,6 +145,7 @@ class GiftWrap(object):
         self.folding_pattern = None
         self.fold_fix = None
 
+        self.ribbon_type = RibbonType.SQUARE
         self.ribbons = None
         self.ribbon_points = None
         self.ribbon_width = None
@@ -229,9 +237,9 @@ class GiftWrap(object):
         self.foldPaper(0)
 
         # create ribbon
-        self.ribbon_width = self.getRibbonWidth(self.ribbon_size, side_d, side_e)
+        self.ribbon_width = self.calcRibbonWidth(self.ribbon_size, side_d, side_e)
         self.ribbon_points = self.getRibbonPoints(self.side_width, self.side_height, self.side_depth, side_a, self.wrap_thickness, self.ribbon_thickness, self.ribbon_width)
-        self.ribbons, self.r_profile = self.createRibbon(self.ribbon_points, self.ribbon_thickness, self.ribbon_width)
+        self.ribbons, self.r_profile = self.createRibbon(self.ribbon_type, self.ribbon_points, self.ribbon_thickness, self.ribbon_width)
 
         self.setDrivenKeys() # Animate
 
@@ -1821,7 +1829,7 @@ class GiftWrap(object):
         return r_points
 
     @staticmethod
-    def getRibbonWidth(r_size, side_d, side_e):
+    def calcRibbonWidth(r_size, side_d, side_e):
         """Calculate width of ribbon"""
         if side_d > side_e :
             smallest_side = side_e
@@ -1839,7 +1847,7 @@ class GiftWrap(object):
 
         return r_width
 
-    def createRibbon(self, r_points, r_thickness, r_width):
+    def createRibbon(self, r_type, r_points, r_thickness, r_width):
         """
         Draw curves for where the ribbon goes.
         Var names: 1U = 1st iteration, upper quadrant, and so on
@@ -1898,54 +1906,42 @@ class GiftWrap(object):
         curve_3R = mc.curve(p=crv_list_3R, n='ribbon_3R_crv_%s' % self.wrap_id)
         curve_4 = mc.curve(p=crv_list_4, n='ribbon_4_crv_%s' % self.wrap_id)
 
-        # Ribbon profile shape
-        r_prof_1D = mc.circle(n='ribbon_1D_profile_' + self.wrap_id)
-        
-        # Use move command to set CV positions
-        mc.move(r_width/2, r_thickness/2, 0, r_prof_1D[0] + '.cv[0]')
-        mc.move(r_width/2, 0, 0, r_prof_1D[0] + '.cv[6]')
-        mc.move(r_width/2, -(r_thickness/2), 0, r_prof_1D[0] + '.cv[7]')
-        mc.move(0, r_thickness/2, 0, r_prof_1D[0] + '.cv[1]')
-        mc.move(-(r_width/2), r_thickness/2, 0, r_prof_1D[0] + '.cv[2]')
-        mc.move(-(r_width/2), 0, 0, r_prof_1D[0] + '.cv[3]')
-        mc.move(-(r_width/2), -(r_thickness/2), 0, r_prof_1D[0] + '.cv[4]')
-        mc.move(0, -(r_thickness/2), 0, r_prof_1D[0] + '.cv[5]')
-        
-        mc.xform(r_prof_1D[0], centerPivots=True)
-        mc.move(r_points['U'][0][0], r_points['U'][0][1], r_points['U'][0][2], r_prof_1D[0])
-        r_prof_1U = mc.instance(r_prof_1D[0], n='ribbon_1U_profile_' + self.wrap_id)
-        mc.setAttr(r_prof_1U[0] + '.rotateY', 180) # Essentially flips normals
-        
-        r_prof_2R = mc.instance(r_prof_1D[0], n='ribbon_2R_profile_' + self.wrap_id)
-        mc.setAttr(r_prof_2R[0] + '.rotateY', 90)
-        mc.setAttr(r_prof_2R[0] + '.translateY', r_points['D'][0][1])
-        r_prof_2L = mc.instance(r_prof_2R[0], n='ribbon_2L_profile_' + self.wrap_id)
-        mc.setAttr(r_prof_2L[0] + '.rotateY', 270) # Flip normals 
+        r_prof_1D = self.createRibbonProfile(r_type, r_width, r_thickness)
 
-        # Bow
+        # Place ribbon profile curves
+        mc.xform(r_prof_1D, centerPivots=True)
+        mc.move(r_points['U'][0][0], r_points['U'][0][1], r_points['U'][0][2], r_prof_1D)
+        r_prof_1U = mc.instance(r_prof_1D, n='ribbon_1U_profile_' + self.wrap_id)[0]
+        mc.setAttr(r_prof_1U + '.rotateY', 180) # Essentially flips normals
+        
+        r_prof_2R = mc.instance(r_prof_1D, n='ribbon_2R_profile_' + self.wrap_id)[0]
+        mc.setAttr(r_prof_2R + '.rotateY', 90)
+        mc.setAttr(r_prof_2R + '.translateY', r_points['D'][0][1])
+        r_prof_2L = mc.instance(r_prof_2R, n='ribbon_2L_profile_' + self.wrap_id)[0]
+        mc.setAttr(r_prof_2L + '.rotateY', -90)
+
+        # Place bow profile and path curves
         bow_rot = 5
-        r_prof_3L = mc.instance(r_prof_1D[0], n='ribbon_3L_profile_' + self.wrap_id)
-        mc.setAttr(r_prof_3L[0] + '.rotateY', 270 + bow_rot)
-        mc.setAttr(r_prof_3L[0] + '.rotateX', -45)
+        r_prof_3L = mc.instance(r_prof_1D, n='ribbon_3L_profile_' + self.wrap_id)[0]
+        mc.setAttr(r_prof_3L + '.rotateY', -90 - bow_rot)
         mc.setAttr(curve_3L + '.rotateY', 0 - bow_rot)
         
-        r_prof_3R = mc.instance(r_prof_1D[0], n='ribbon_3R_profile_' + self.wrap_id)
-        mc.setAttr(r_prof_3R[0] + '.rotateY', 90 - bow_rot)
-        mc.setAttr(r_prof_3R[0] + '.rotateX', -45)
+        r_prof_3R = mc.instance(r_prof_1D, n='ribbon_3R_profile_' + self.wrap_id)[0]
+        mc.setAttr(r_prof_3R + '.rotateY', 90 + bow_rot)
         mc.setAttr(curve_3R + '.rotateY', 0 + bow_rot)
         
-        r_prof_4 = mc.instance(r_prof_1D[0], n='ribbon_4_profile_' + self.wrap_id)
-        mc.setAttr(r_prof_4[0] + '.translateZ', r_width / 2)
-        mc.setAttr(r_prof_4[0] + '.rotateX', 270)
-        
+        r_prof_4 = mc.instance(r_prof_1D, n='ribbon_4_profile_' + self.wrap_id)[0]
+        mc.setAttr(r_prof_4 + '.translateZ', r_width / 2)
+        mc.setAttr(r_prof_4 + '.rotateX', -90)
+
         # Extrusions
-        r_extrude_1U = mc.extrude(r_prof_1U[0], curve_1U, et=2, rn=True, n='ribbon_ext_1U' + self.wrap_id)
-        r_extrude_1D = mc.extrude(r_prof_1D[0], curve_1D, et=2, rn=True, n='ribbon_ext_1D' + self.wrap_id)
-        r_extrude_2L = mc.extrude(r_prof_2L[0], curve_2L, et=2, rn=True, n='ribbon_ext_2L' + self.wrap_id)
-        r_extrude_2R = mc.extrude(r_prof_2R[0], curve_2R, et=2, rn=True, n='ribbon_ext_2R' + self.wrap_id)
-        r_extrude_3L = mc.extrude(r_prof_3L[0], curve_3L, et=2, rn=True, n='ribbon_ext_3L' + self.wrap_id)
-        r_extrude_3R = mc.extrude(r_prof_3R[0], curve_3R, et=2, rn=True, n='ribbon_ext_3R' + self.wrap_id)
-        r_extrude_4 = mc.extrude(r_prof_4[0], curve_4, et=2, rn=True, n='ribbon_ext_4' + self.wrap_id)
+        r_extrude_1U = mc.extrude(r_prof_1U, curve_1U, et=2, rn=True, n='ribbon_ext_1U' + self.wrap_id)
+        r_extrude_1D = mc.extrude(r_prof_1D, curve_1D, et=2, rn=True, n='ribbon_ext_1D' + self.wrap_id)
+        r_extrude_2L = mc.extrude(r_prof_2L, curve_2L, et=2, rn=True, n='ribbon_ext_2L' + self.wrap_id)
+        r_extrude_2R = mc.extrude(r_prof_2R, curve_2R, et=2, rn=True, n='ribbon_ext_2R' + self.wrap_id)
+        r_extrude_3L = mc.extrude(r_prof_3L, curve_3L, et=2, rn=True, n='ribbon_ext_3L' + self.wrap_id)
+        r_extrude_3R = mc.extrude(r_prof_3R, curve_3R, et=2, rn=True, n='ribbon_ext_3R' + self.wrap_id)
+        r_extrude_4 = mc.extrude(r_prof_4, curve_4, et=2, rn=True, n='ribbon_ext_4' + self.wrap_id)
 
         # Make ribbons taper
         mc.setAttr(r_extrude_3L[0] + '.scaleX', 0.8)
@@ -1978,24 +1974,44 @@ class GiftWrap(object):
         mc.parent(curve_4, self.r_curve_group_name)
         
         # Parent extruded ribbons to group
-        mc.parent(r_extrude_1U[0], self.ribbon_group_name)
-        mc.parent(r_extrude_1D[0], self.ribbon_group_name)
-        mc.parent(r_extrude_2L[0], self.ribbon_group_name)
-        mc.parent(r_extrude_2R[0], self.ribbon_group_name)
-        mc.parent(r_extrude_3L[0], self.ribbon_group_name)
-        mc.parent(r_extrude_3R[0], self.ribbon_group_name)
-        mc.parent(r_extrude_4[0], self.ribbon_group_name)
+        mc.parent(r_extrude_1U, self.ribbon_group_name)
+        mc.parent(r_extrude_1D, self.ribbon_group_name)
+        mc.parent(r_extrude_2L, self.ribbon_group_name)
+        mc.parent(r_extrude_2R, self.ribbon_group_name)
+        mc.parent(r_extrude_3L, self.ribbon_group_name)
+        mc.parent(r_extrude_3R, self.ribbon_group_name)
+        mc.parent(r_extrude_4, self.ribbon_group_name)
         
         # Parent profiles to group
-        mc.parent(r_prof_1U[0], self.r_curve_group_name)
-        mc.parent(r_prof_1D[0], self.r_curve_group_name)
-        mc.parent(r_prof_2L[0], self.r_curve_group_name)
-        mc.parent(r_prof_2R[0], self.r_curve_group_name)
-        mc.parent(r_prof_3L[0], self.r_curve_group_name)
-        mc.parent(r_prof_3R[0], self.r_curve_group_name)
-        mc.parent(r_prof_4[0], self.r_curve_group_name)
+        mc.parent(r_prof_1U, self.r_curve_group_name)
+        mc.parent(r_prof_1D, self.r_curve_group_name)
+        mc.parent(r_prof_2L, self.r_curve_group_name)
+        mc.parent(r_prof_2R, self.r_curve_group_name)
+        mc.parent(r_prof_3L, self.r_curve_group_name)
+        mc.parent(r_prof_3R, self.r_curve_group_name)
+        mc.parent(r_prof_4, self.r_curve_group_name)
         
         return ribbons, r_prof_1D
+
+    def createRibbonProfile(self, type, r_width, r_thickness):
+        crv_suffix = 'ribbon_1D_profile_'
+        if type == RibbonType.ROUND:
+            profile = mc.circle(n=crv_suffix + self.wrap_id)
+            mc.move(r_width/2, r_thickness/2, 0, profile + '.cv[0]')
+            mc.move(r_width/2, 0, 0, profile + '.cv[6]')
+            mc.move(r_width/2, -(r_thickness/2), 0, profile + '.cv[7]')
+            mc.move(0, r_thickness/2, 0, profile + '.cv[1]')
+            mc.move(-(r_width/2), r_thickness/2, 0, profile + '.cv[2]')
+            mc.move(-(r_width/2), 0, 0, profile + '.cv[3]')
+            mc.move(-(r_width/2), -(r_thickness/2), 0, profile + '.cv[4]')
+            mc.move(0, -(r_thickness/2), 0, profile + '.cv[5]')
+        else:
+            profile = mc.circle(n=crv_suffix + self.wrap_id, sections=4, radius=r_width / 2, degree=1)[0]
+            mc.xform(profile, rotation=[0, 0, 45])
+            mc.makeIdentity(profile, apply=True)
+            mc.xform(profile, scale=[1, 0.1, 1])
+            mc.makeIdentity(profile, apply=True)
+        return profile
 
     def getObjectSides(self):
         """Get height, width and depth from boundingbox of just the object"""
