@@ -3,12 +3,10 @@
 Gift Wrap Script, Fredrik Juréen 2025
 """
 
-import maya.cmds as mc
+import maya.cmds as cmds
 import maya.mel as mel
 import string
 import random
-import re
-import itertools
 from enum import IntEnum
 
 obj_num_min = 3
@@ -23,6 +21,12 @@ class RibbonType(IntEnum):
 
 class PaperType(IntEnum):
     FLAT, THIN_BOX = range(2)
+
+class CoordinateSpace(IntEnum):
+    WORLD, OBJECT = range(2)
+
+class UpAxis(IntEnum):
+    X, Y, Z, LARGEST_SIDE = range(4)
 
 class GiftWrap(object):
     """
@@ -115,10 +119,15 @@ class GiftWrap(object):
                  a           :
 
     """
-    def __init__(self, name, mode='create', ribbon_size='L', thickness=0.02, wrap_color='random', ribbon_color='random', anim_s=1, anim_e=24):
+    def __init__(
+            self, name,
+            mode='create', ribbon_size='L', thickness=0.02, wrap_color='random',
+            ribbon_color='random', anim_s=1, anim_e=24,
+            orientation=CoordinateSpace.OBJECT
+    ):
         # Don't create object if node can't be found
 
-        if  not mc.objExists(name):
+        if  not cmds.objExists(name):
             raise ValueError('Node "%s" does not exist' % (name,))
 
         self.wrap_name = name
@@ -128,6 +137,9 @@ class GiftWrap(object):
         self.wrap_gift = None
         self.wrap_paper = None
         self.ctrl_handle = None
+
+        self.coord_space = orientation
+        self.up_axis = UpAxis.Y
 
         self.main_group_name = None
         self.r_curve_group_name = None
@@ -184,22 +196,22 @@ class GiftWrap(object):
         self.ribbon_thickness = self.wrap_thickness
 
         # Group hierarchy
-        mc.select(d=True) # Deselect
-        self.main_group_name = mc.group(n='%s_gift_wrap_%s_GRP' % (self.wrap_name, self.wrap_id), empty=True)
-        mc.select(d=True)
-        self.ribbon_group_name = mc.group(n='ribbon_%s_GRP' % self.wrap_id, empty=True)
-        mc.select(d=True)
-        self.gift_group_name = mc.group(n='gift_%s_GRP' % self.wrap_id, empty=True)
-        mc.select(d=True)
-        self.fold_group_name = mc.group(n='fold_%s_GRP' % self.wrap_id, empty=True)
-        mc.select(d=True)
-        self.obj_group_name = mc.group(n='obj_%s_GRP' % self.wrap_id, empty=True)
-        mc.select(d=True)
-        self.cluster_group_name = mc.group(n='cluster_%s_GRP' % self.wrap_id, empty=True)
-        mc.setAttr('%s.inheritsTransform' % self.cluster_group_name, 0) # Clusters need to stay where they are
-        mc.select(d=True)
-        self.r_curve_group_name = mc.group(n='ribbon_crv_%s_GRP' % self.wrap_id, empty=True)
-        mc.setAttr('%s.inheritsTransform' % self.r_curve_group_name, 0) # Ribbon curves need to stay where they are
+        cmds.select(d=True) # Deselect
+        self.main_group_name = cmds.group(n='%s_gift_wrap_%s_GRP' % (self.wrap_name, self.wrap_id), empty=True)
+        cmds.select(d=True)
+        self.ribbon_group_name = cmds.group(n='ribbon_%s_GRP' % self.wrap_id, empty=True)
+        cmds.select(d=True)
+        self.gift_group_name = cmds.group(n='gift_%s_GRP' % self.wrap_id, empty=True)
+        cmds.select(d=True)
+        self.fold_group_name = cmds.group(n='fold_%s_GRP' % self.wrap_id, empty=True)
+        cmds.select(d=True)
+        self.obj_group_name = cmds.group(n='obj_%s_GRP' % self.wrap_id, empty=True)
+        cmds.select(d=True)
+        self.cluster_group_name = cmds.group(n='cluster_%s_GRP' % self.wrap_id, empty=True)
+        cmds.setAttr('%s.inheritsTransform' % self.cluster_group_name, 0) # Clusters need to stay where they are
+        cmds.select(d=True)
+        self.r_curve_group_name = cmds.group(n='ribbon_crv_%s_GRP' % self.wrap_id, empty=True)
+        cmds.setAttr('%s.inheritsTransform' % self.r_curve_group_name, 0) # Ribbon curves need to stay where they are
 
         if not obj:
             self.wrap_gift = self.wrap_name
@@ -211,23 +223,23 @@ class GiftWrap(object):
         # parent all groups to ctrl handle
         self.ctrl_handle = self.createControlHandle(side_a*1.4)
         self.storeCtrlValues() # Store values in the CTRL handle for future reference
-        mc.parent(self.ctrl_handle[0], self.main_group_name)
-        mc.parent([self.fold_group_name, self.obj_group_name], self.gift_group_name)
-        mc.parent([self.gift_group_name, self.cluster_group_name, self.ribbon_group_name, self.r_curve_group_name], self.ctrl_handle[0])
-        mc.parent(self.wrap_gift, self.obj_group_name)
+        cmds.parent(self.ctrl_handle[0], self.main_group_name)
+        cmds.parent([self.fold_group_name, self.obj_group_name], self.gift_group_name)
+        cmds.parent([self.gift_group_name, self.cluster_group_name, self.ribbon_group_name, self.r_curve_group_name], self.ctrl_handle[0])
+        cmds.parent(self.wrap_gift, self.obj_group_name)
 
-        mc.setAttr(self.cluster_group_name + '.visibility', 0)
-        mc.setAttr(self.r_curve_group_name + '.visibility', 0)
+        cmds.setAttr(self.cluster_group_name + '.visibility', 0)
+        cmds.setAttr(self.r_curve_group_name + '.visibility', 0)
 
         # get folding pattern, create folding plane
         self.folding_pattern = self.getFoldingPattern(side_a, side_d, side_e, self.wrap_thickness)
         self.f_plane, self.folding_pattern = self.createFoldingPlane(self.folding_pattern)
-        mc.setAttr(self.f_plane[0] + '.visibility', 0)
-        mc.parent(self.f_plane, self.fold_group_name)
+        cmds.setAttr(self.f_plane[0] + '.visibility', 0)
+        cmds.parent(self.f_plane, self.fold_group_name)
 
         # create paper mesh and folding clusters
         self.wrap_paper = self.createPaper(self.f_plane, self.wrap_thickness)
-        mc.setAttr(self.wrap_paper[0] + '.visibility', 1)
+        cmds.setAttr(self.wrap_paper[0] + '.visibility', 1)
         self.pivots =  self.getFoldingPivots(self.folding_pattern)
         self.createClusters(self.folding_pattern)
 
@@ -249,17 +261,17 @@ class GiftWrap(object):
 
         self.setAnimation()
 
-        mc.setAttr(self.ctrl_handle[0] + '.animation', 15)
+        cmds.setAttr(self.ctrl_handle[0] + '.animation', 15)
 
     def removeGiftWrap(self):
         """
         Unparents object to be wrapped, resets rotate/translate,
         deletes everything else.
         """
-        mc.parent(self.wrap_gift, world=True)
-        mc.move(0, self.wrap_thickness, 0, self.wrap_gift, relativeTo=['parent'])
-        mc.setAttr(self.wrap_gift + '.rotate', 0, 0, 0, type='double3')
-        mc.delete(self.main_group_name)
+        cmds.parent(self.wrap_gift, world=True)
+        cmds.move(0, self.wrap_thickness, 0, self.wrap_gift, relativeTo=['parent'])
+        cmds.setAttr(self.wrap_gift + '.rotate', 0, 0, 0, type='double3')
+        cmds.delete(self.main_group_name)
 
     def loadGiftWrap(self):
         self.ctrl_handle = [self.wrap_name]
@@ -277,32 +289,32 @@ class GiftWrap(object):
         self.wrap_gift = obj_name
         self.main_group_name = main_grp_name
         self.wrap_paper = [paper_name]
-        self.ribbons = mc.listRelatives(self.ctrl_handle, allDescendents=True, fullPath=False, type='nurbsSurface')
-        ribbon_prof = mc.listRelatives(self.ctrl_handle, allDescendents=True, fullPath=False, type='nurbsCurve')[-1]
-        self.ribbon_prof = mc.listRelatives(ribbon_prof, allParents=True)
+        self.ribbons = cmds.listRelatives(self.ctrl_handle, allDescendents=True, fullPath=False, type='nurbsSurface')
+        ribbon_prof = cmds.listRelatives(self.ctrl_handle, allDescendents=True, fullPath=False, type='nurbsCurve')[-1]
+        self.ribbon_prof = cmds.listRelatives(ribbon_prof, allParents=True)
 
-        self.ini_r = mc.getAttr(self.main_group_name + '.rotate')[0]
-        self.ini_t = mc.getAttr(self.main_group_name + '.translate')[0]
+        self.ini_r = cmds.getAttr(self.main_group_name + '.rotate')[0]
+        self.ini_t = cmds.getAttr(self.main_group_name + '.translate')[0]
 
     def storeCtrlValues(self):
-        mc.setAttr(self.ctrl_handle[0] + '.wrap_name', self.wrap_name, type='string')
-        mc.setAttr(self.ctrl_handle[0] + '.wrap_id', self.wrap_id, type='string')
-        mc.setAttr(self.ctrl_handle[0] + '.wrap_thickness', self.wrap_thickness)
-        mc.setAttr(self.ctrl_handle[0] + '.wrap_color', self.wrap_color, type='string')
-        mc.setAttr(self.ctrl_handle[0] + '.ribbon_size', self.ribbon_size, type='string')
-        mc.setAttr(self.ctrl_handle[0] + '.ribbon_color', self.ribbon_color, type='string')
-        mc.setAttr(self.ctrl_handle[0] + '.animation_start', self.animation_start)
-        mc.setAttr(self.ctrl_handle[0] + '.animation_end', self.animation_end)
+        cmds.setAttr(self.ctrl_handle[0] + '.wrap_name', self.wrap_name, type='string')
+        cmds.setAttr(self.ctrl_handle[0] + '.wrap_id', self.wrap_id, type='string')
+        cmds.setAttr(self.ctrl_handle[0] + '.wrap_thickness', self.wrap_thickness)
+        cmds.setAttr(self.ctrl_handle[0] + '.wrap_color', self.wrap_color, type='string')
+        cmds.setAttr(self.ctrl_handle[0] + '.ribbon_size', self.ribbon_size, type='string')
+        cmds.setAttr(self.ctrl_handle[0] + '.ribbon_color', self.ribbon_color, type='string')
+        cmds.setAttr(self.ctrl_handle[0] + '.animation_start', self.animation_start)
+        cmds.setAttr(self.ctrl_handle[0] + '.animation_end', self.animation_end)
 
     def retrieveCtrlValues(self):
-        self.wrap_name = mc.getAttr(self.ctrl_handle[0] + '.wrap_name')
-        self.wrap_id = mc.getAttr(self.ctrl_handle[0] + '.wrap_id')
-        self.wrap_thickness = mc.getAttr(self.ctrl_handle[0] + '.wrap_thickness')
-        self.wrap_color = mc.getAttr(self.ctrl_handle[0] + '.wrap_color')
-        self.ribbon_size = mc.getAttr(self.ctrl_handle[0] + '.ribbon_size')
-        self.ribbon_color = mc.getAttr(self.ctrl_handle[0] + '.ribbon_color')
-        self.animation_start = mc.getAttr(self.ctrl_handle[0] + '.animation_start')
-        self.animation_end = mc.getAttr(self.ctrl_handle[0] + '.animation_end')
+        self.wrap_name = cmds.getAttr(self.ctrl_handle[0] + '.wrap_name')
+        self.wrap_id = cmds.getAttr(self.ctrl_handle[0] + '.wrap_id')
+        self.wrap_thickness = cmds.getAttr(self.ctrl_handle[0] + '.wrap_thickness')
+        self.wrap_color = cmds.getAttr(self.ctrl_handle[0] + '.wrap_color')
+        self.ribbon_size = cmds.getAttr(self.ctrl_handle[0] + '.ribbon_size')
+        self.ribbon_color = cmds.getAttr(self.ctrl_handle[0] + '.ribbon_color')
+        self.animation_start = cmds.getAttr(self.ctrl_handle[0] + '.animation_start')
+        self.animation_end = cmds.getAttr(self.ctrl_handle[0] + '.animation_end')
 
     def placeLargestSideDown(self):
         """
@@ -311,29 +323,25 @@ class GiftWrap(object):
         > The smallest sides pointing to the left/right along the x-axis
         """
 
-    def getBoundingBox(self, coord_space):
-        obj_space = coord_space == CoordinateSpace.OBJECT
-        return
-
     def placeGift(self):
         """
         Place object to be wrapped(the gift) at the origin and orient it.
         """
 
         # Store initial transform values
-        self.ini_r = mc.xform(self.wrap_gift, query=True, rotation=True, worldSpace=True)
-        self.ini_t = mc.xform(self.wrap_gift, query=True, translation=True, worldSpace=True)
+        self.ini_r = cmds.xform(self.wrap_gift, query=True, rotation=True, worldSpace=True)
+        self.ini_t = cmds.xform(self.wrap_gift, query=True, translation=True, worldSpace=True)
     
         # Store initial pivot values
-        self.ini_sp = mc.xform(self.wrap_gift, query=True, scalePivot=True, worldSpace=True)
-        self.ini_rp = mc.xform(self.wrap_gift, query=True, rotatePivot=True, worldSpace=True)
+        self.ini_sp = cmds.xform(self.wrap_gift, query=True, scalePivot=True, worldSpace=True)
+        self.ini_rp = cmds.xform(self.wrap_gift, query=True, rotatePivot=True, worldSpace=True)
         
-        mc.xform(self.wrap_gift, centerPivots=True)
-        mc.xform(self.wrap_gift, rotation=[0, 0, 0], objectSpace=True)
-        mc.move(0, 0, 0, self.wrap_gift, rotatePivotRelative=True)
+        cmds.xform(self.wrap_gift, centerPivots=True)
+        cmds.xform(self.wrap_gift, rotation=[0, 0, 0], objectSpace=True)
+        cmds.move(0, 0, 0, self.wrap_gift, rotatePivotRelative=True)
 
         # Get bounding box dimensions
-        bbox = mc.exactWorldBoundingBox(self.wrap_gift)
+        bbox = cmds.exactWorldBoundingBox(self.wrap_gift)
         bbox_min = [bbox[0], bbox[1], bbox[2]]
         bbox_max = [bbox[3], bbox[4], bbox[5]]
         bbox_minmax = [bbox_max[0] - bbox_min[0], bbox_max[1] - bbox_min[1], bbox_max[2] - bbox_min[2]]
@@ -363,27 +371,27 @@ class GiftWrap(object):
         elif largest_a == 'wh':
             gift_new_pivot = [0, 0, self.bbox_depth * 0.5]
         
-        mc.xform(self.wrap_gift, scalePivot=gift_new_pivot, relative=True)
-        mc.xform(self.wrap_gift, rotatePivot=gift_new_pivot, relative=True)
-        self.ini_pivot_offs = [0, mc.xform(self.wrap_gift, query=True, scalePivot=True, worldSpace=True)[1], 0]
+        cmds.xform(self.wrap_gift, scalePivot=gift_new_pivot, relative=True)
+        cmds.xform(self.wrap_gift, rotatePivot=gift_new_pivot, relative=True)
+        self.ini_pivot_offs = [0, cmds.xform(self.wrap_gift, query=True, scalePivot=True, worldSpace=True)[1], 0]
                 
         # Place gift on top of paper
-        mc.move(0, self.wrap_thickness, 0, self.wrap_gift, rotatePivotRelative=True)
+        cmds.move(0, self.wrap_thickness, 0, self.wrap_gift, rotatePivotRelative=True)
 
         if largest_a == 'dh':
-            mc.xform(self.wrap_gift, rotation=[0, 0, 90], objectSpace=True)
+            cmds.xform(self.wrap_gift, rotation=[0, 0, 90], objectSpace=True)
         elif largest_a == 'wh':
-            mc.xform(self.wrap_gift, rotation=[90, 0, 0], objectSpace=True)
+            cmds.xform(self.wrap_gift, rotation=[90, 0, 0], objectSpace=True)
 
         # Rotates object, smallest side pointing left/right(X)
         if ((largest_a == 'dw' and smallest_a == 'wh') or
             (largest_a == 'dh' and smallest_a == 'wh') or
             (largest_a == 'wh' and smallest_a == 'dw')):
-            mc.xform(self.wrap_gift, rotation=[0, 90, 0], euler=True, relative=True, objectSpace=True)
+            cmds.xform(self.wrap_gift, rotation=[0, 90, 0], euler=True, relative=True, objectSpace=True)
 
         # Restore pivots
-        mc.xform(self.wrap_gift, rotatePivot=self.ini_rp, objectSpace=True)
-        mc.xform(self.wrap_gift, scalePivot=self.ini_sp, objectSpace=True)
+        cmds.xform(self.wrap_gift, rotatePivot=self.ini_rp, objectSpace=True)
+        cmds.xform(self.wrap_gift, scalePivot=self.ini_sp, objectSpace=True)
         
                 
                 
@@ -391,29 +399,29 @@ class GiftWrap(object):
         """
         Moves the object back to its initial position
         """
-        mc.setAttr(self.main_group_name + '.translate', self.ini_t[0], self.ini_t[1], self.ini_t[2], type='double3')
-        mc.setAttr(self.main_group_name + '.rotate', self.ini_r[0], self.ini_r[1], self.ini_r[2], type='double3')
+        cmds.setAttr(self.main_group_name + '.translate', self.ini_t[0], self.ini_t[1], self.ini_t[2], type='double3')
+        cmds.setAttr(self.main_group_name + '.rotate', self.ini_r[0], self.ini_r[1], self.ini_r[2], type='double3')
         
         # Place the gift at the lowest center point of the original object
-        mc.xform(self.main_group_name, translation=self.ini_pivot_offs, euler=True, relative=True, worldSpace=True)
+        cmds.xform(self.main_group_name, translation=self.ini_pivot_offs, euler=True, relative=True, worldSpace=True)
 
     def createControlHandle(self, radius):
-        ctrl = mc.circle(radius=radius, name='CTRL_gift_' + self.wrap_id)
+        ctrl = cmds.circle(radius=radius, name='CTRL_gift_' + self.wrap_id)
 
         # Add custom attributes
-        mc.addAttr(ctrl[0], longName='animation', keyable=True)
-        mc.addAttr(ctrl[0], longName='wrap_name', dataType='string', hidden=True, keyable=False)
-        mc.addAttr(ctrl[0], longName='wrap_id', dataType='string', hidden=True, keyable=False)
-        mc.addAttr(ctrl[0], longName='wrap_thickness', attributeType='float', hidden=True, keyable=False)
-        mc.addAttr(ctrl[0], longName='wrap_color', dataType='string', hidden=True, keyable=False)
-        mc.addAttr(ctrl[0], longName='ribbon_size', dataType='string', hidden=True, keyable=False)
-        mc.addAttr(ctrl[0], longName='ribbon_color', dataType='string', hidden=True, keyable=False)
-        mc.addAttr(ctrl[0], longName='animation_start', hidden=True, keyable=False)
-        mc.addAttr(ctrl[0], longName='animation_end', hidden=True, keyable=False)
+        cmds.addAttr(ctrl[0], longName='animation', keyable=True)
+        cmds.addAttr(ctrl[0], longName='wrap_name', dataType='string', hidden=True, keyable=False)
+        cmds.addAttr(ctrl[0], longName='wrap_id', dataType='string', hidden=True, keyable=False)
+        cmds.addAttr(ctrl[0], longName='wrap_thickness', attributeType='float', hidden=True, keyable=False)
+        cmds.addAttr(ctrl[0], longName='wrap_color', dataType='string', hidden=True, keyable=False)
+        cmds.addAttr(ctrl[0], longName='ribbon_size', dataType='string', hidden=True, keyable=False)
+        cmds.addAttr(ctrl[0], longName='ribbon_color', dataType='string', hidden=True, keyable=False)
+        cmds.addAttr(ctrl[0], longName='animation_start', hidden=True, keyable=False)
+        cmds.addAttr(ctrl[0], longName='animation_end', hidden=True, keyable=False)
         
         # Set rotation and freeze transformations
-        mc.setAttr(ctrl[0] + '.rotateX', 90)
-        mc.makeIdentity(ctrl[0], apply=True)
+        cmds.setAttr(ctrl[0] + '.rotateX', 90)
+        cmds.makeIdentity(ctrl[0], apply=True)
         
         return ctrl
 
@@ -565,14 +573,14 @@ class GiftWrap(object):
         Helper function to set the position of a vertex in a mesh
         """
         vertex_path = mesh_name + '.vtx[%d]' % vertex_index
-        mc.xform(vertex_path, translation=position, worldSpace=True)
+        cmds.xform(vertex_path, translation=position, worldSpace=True)
 
     @staticmethod
     def mergeVertices(vertex_list):
         """
         Helper function to merge a list of vertices
         """
-        mc.polyMergeVertex(vertex_list, constructionHistory=0)
+        cmds.polyMergeVertex(vertex_list, constructionHistory=0)
 
     @staticmethod
     def mergeVertexRange(mesh_name, start_index, end_index):
@@ -583,7 +591,7 @@ class GiftWrap(object):
         for i in range(start_index, end_index + 1):
             vertex_list.append(mesh_name + '.vtx[%d]' % i)
         
-        mc.polyMergeVertex(vertex_list, constructionHistory=0)
+        cmds.polyMergeVertex(vertex_list, constructionHistory=0)
 
     @staticmethod
     def deleteEdge(mesh_name, edge_index, cleanup=True):
@@ -591,7 +599,7 @@ class GiftWrap(object):
         Helper function to delete an edge from a mesh
         """
         edge_path = mesh_name + '.e[%d]' % edge_index
-        mc.polyDelEdge(edge_path, constructionHistory=0, cleanVertices=cleanup)
+        cmds.polyDelEdge(edge_path, constructionHistory=0, cleanVertices=cleanup)
 
     @staticmethod
     def getVertexRangeList(mesh_name, range_list):
@@ -609,7 +617,7 @@ class GiftWrap(object):
         Create polyplane that will fold up and serve as a wrap deformer
         """
         plane_name = 'folding_plane_%s' % (self.wrap_id,)
-        wrap_fold_pln = mc.polyPlane(name=plane_name, subdivisionsX=3, subdivisionsY=6, constructionHistory=0)
+        wrap_fold_pln = cmds.polyPlane(name=plane_name, subdivisionsX=3, subdivisionsY=6, constructionHistory=0)
 
         # Moves vertices to align them with folding pattern,
         self.setVertexPosition(wrap_fold_pln[0], 0, wrap_points['F8'][0])
@@ -644,7 +652,7 @@ class GiftWrap(object):
         # Models mid right diagonal folds
         if not self.wrap_overlap:
             temp_face = wrap_fold_pln[0] + '.f[11]'
-            mc.polySubdivideFacet(temp_face, divisionsU=1, divisionsV=3, subdMethod=1, constructionHistory=0)
+            cmds.polySubdivideFacet(temp_face, divisionsU=1, divisionsV=3, subdMethod=1, constructionHistory=0)
             self.setVertexPosition(wrap_fold_pln[0], 31, wrap_points['H3'][0])
             self.setVertexPosition(wrap_fold_pln[0], 30, wrap_points['H5'][0])
             self.setVertexPosition(wrap_fold_pln[0], 29, wrap_points['I4a'][0])
@@ -652,7 +660,7 @@ class GiftWrap(object):
             self.mergeVertexRange(wrap_fold_pln[0], 14, 31)
         else:
             temp_face = wrap_fold_pln[0] + '.f[11]'
-            mc.polySubdivideFacet(temp_face, divisionsU=2, divisionsV=3, subdMethod=1, constructionHistory=0)
+            cmds.polySubdivideFacet(temp_face, divisionsU=2, divisionsV=3, subdMethod=1, constructionHistory=0)
             self.setVertexPosition(wrap_fold_pln[0], 35, wrap_points['HI4'][0])
             self.setVertexPosition(wrap_fold_pln[0], 34, wrap_points['HI4'][0])
             self.setVertexPosition(wrap_fold_pln[0], 33, wrap_points['H5'][0])
@@ -666,7 +674,7 @@ class GiftWrap(object):
         # Models mid left diagonal folds
         if not self.wrap_overlap:
             temp_face = wrap_fold_pln[0] + '.f[9]'
-            mc.polySubdivideFacet(temp_face, divisionsU=1, divisionsV=3, subdMethod=1, constructionHistory=0)
+            cmds.polySubdivideFacet(temp_face, divisionsU=1, divisionsV=3, subdMethod=1, constructionHistory=0)
             self.setVertexPosition(wrap_fold_pln[0], 31, wrap_points['G3'][0])
             self.setVertexPosition(wrap_fold_pln[0], 30, wrap_points['G5'][0])
             self.setVertexPosition(wrap_fold_pln[0], 33, wrap_points['F4a'][0])
@@ -674,7 +682,7 @@ class GiftWrap(object):
             self.mergeVertexRange(wrap_fold_pln[0], 12, 33)
         else:
             temp_face = wrap_fold_pln[0] + '.f[9]'
-            mc.polySubdivideFacet(temp_face, divisionsU=2, divisionsV=3, subdMethod=1, constructionHistory=0)
+            cmds.polySubdivideFacet(temp_face, divisionsU=2, divisionsV=3, subdMethod=1, constructionHistory=0)
             self.setVertexPosition(wrap_fold_pln[0], 38, wrap_points['FG4'][0])
             self.setVertexPosition(wrap_fold_pln[0], 37, wrap_points['FG4'][0])
             self.setVertexPosition(wrap_fold_pln[0], 36, wrap_points['G5'][0])
@@ -688,13 +696,13 @@ class GiftWrap(object):
         # Models top right diagonal folds
         if not self.wrap_overlap:
             temp_face = wrap_fold_pln[0] + '.f[17]'
-            mc.polySubdivideFacet(temp_face, divisionsU=1, divisionsV=2, subdMethod=1, constructionHistory=0)
+            cmds.polySubdivideFacet(temp_face, divisionsU=1, divisionsV=2, subdMethod=1, constructionHistory=0)
             self.setVertexPosition(wrap_fold_pln[0], 33, wrap_points['H2'][0])
             self.setVertexPosition(wrap_fold_pln[0], 32, wrap_points['I1a'][0])
             self.mergeVertexRange(wrap_fold_pln[0], 22, 33)
         else:
             temp_face = wrap_fold_pln[0] + '.f[16]'
-            mc.polySubdivideFacet(temp_face, divisionsU=2, divisionsV=2, subdMethod=1, constructionHistory=0)
+            cmds.polySubdivideFacet(temp_face, divisionsU=2, divisionsV=2, subdMethod=1, constructionHistory=0)
             self.setVertexPosition(wrap_fold_pln[0], 38, wrap_points['I1a'][0])
             self.setVertexPosition(wrap_fold_pln[0], 37, wrap_points['H2'][0])
             self.setVertexPosition(wrap_fold_pln[0], 35, wrap_points['I1b'][0])
@@ -705,13 +713,13 @@ class GiftWrap(object):
         # Models top left diagonal folds
         if not self.wrap_overlap:
             temp_face = wrap_fold_pln[0] + '.f[15]'
-            mc.polySubdivideFacet(temp_face, divisionsU=1, divisionsV=2, subdMethod=1, constructionHistory=0)
+            cmds.polySubdivideFacet(temp_face, divisionsU=1, divisionsV=2, subdMethod=1, constructionHistory=0)
             self.setVertexPosition(wrap_fold_pln[0], 33, wrap_points['G2'][0])
             self.setVertexPosition(wrap_fold_pln[0], 34, wrap_points['F1a'][0])
             self.mergeVertexRange(wrap_fold_pln[0], 21, 33)
         else:
             temp_face = wrap_fold_pln[0] + '.f[14]'
-            mc.polySubdivideFacet(temp_face, divisionsU=2, divisionsV=2, subdMethod=1, constructionHistory=0)
+            cmds.polySubdivideFacet(temp_face, divisionsU=2, divisionsV=2, subdMethod=1, constructionHistory=0)
             self.setVertexPosition(wrap_fold_pln[0], 40, wrap_points['F1a'][0])
             self.setVertexPosition(wrap_fold_pln[0], 39, wrap_points['G2'][0])
             self.setVertexPosition(wrap_fold_pln[0], 36, wrap_points['F1'][0])
@@ -722,13 +730,13 @@ class GiftWrap(object):
         # Models bottom right diagonal folds
         if not self.wrap_overlap:
             temp_face = wrap_fold_pln[0] + '.f[5]'
-            mc.polySubdivideFacet(temp_face, divisionsU=1, divisionsV=2, subdMethod=1, constructionHistory=0)
+            cmds.polySubdivideFacet(temp_face, divisionsU=1, divisionsV=2, subdMethod=1, constructionHistory=0)
             self.setVertexPosition(wrap_fold_pln[0], 35, wrap_points['H6'][0])
             self.setVertexPosition(wrap_fold_pln[0], 34, wrap_points['I7a'][0])
             self.mergeVertexRange(wrap_fold_pln[0], 10, 35)
         else:
             temp_face = [wrap_fold_pln[0] + '.f[2]', wrap_fold_pln[0] + '.f[5]']
-            mc.polySubdivideFacet(temp_face, divisionsU=2, divisionsV=1, subdMethod=1, constructionHistory=0)
+            cmds.polySubdivideFacet(temp_face, divisionsU=2, divisionsV=1, subdMethod=1, constructionHistory=0)
             self.setVertexPosition(wrap_fold_pln[0], 40, wrap_points['I7b'][0])
             self.setVertexPosition(wrap_fold_pln[0], 39, wrap_points['I7b'][0])
             self.setVertexPosition(wrap_fold_pln[0], 7, wrap_points['I7a'][0])
@@ -741,13 +749,13 @@ class GiftWrap(object):
         # Models bottom left diagonal folds
         if not self.wrap_overlap:
             temp_face = wrap_fold_pln[0] + '.f[3]'
-            mc.polySubdivideFacet(temp_face, divisionsU=1, divisionsV=2, subdMethod=1, constructionHistory=0)
+            cmds.polySubdivideFacet(temp_face, divisionsU=1, divisionsV=2, subdMethod=1, constructionHistory=0)
             self.setVertexPosition(wrap_fold_pln[0], 35, wrap_points['G6'][0])
             self.setVertexPosition(wrap_fold_pln[0], 36, wrap_points['F7a'][0])
             self.mergeVertexRange(wrap_fold_pln[0], 9, 35)
         else:
             temp_face = [wrap_fold_pln[0] + '.f[0]', wrap_fold_pln[0] + '.f[3]']
-            mc.polySubdivideFacet(temp_face, divisionsU=2, divisionsV=1, subdMethod=1, constructionHistory=0)
+            cmds.polySubdivideFacet(temp_face, divisionsU=2, divisionsV=1, subdMethod=1, constructionHistory=0)
             self.setVertexPosition(wrap_fold_pln[0], 40, wrap_points['F7b'][0])
             self.setVertexPosition(wrap_fold_pln[0], 39, wrap_points['F7b'][0])
             self.setVertexPosition(wrap_fold_pln[0], 4, wrap_points['F7a'][0])
@@ -760,7 +768,7 @@ class GiftWrap(object):
         # Model top diagonal fold points F1c, I1c
         if self.wrap_overlap:
             temp_face = [wrap_fold_pln[0] + '.f[15]', wrap_fold_pln[0] + '.f[25]']
-            mc.polySubdivideFacet(temp_face, divisionsU=1, divisionsV=2, subdMethod=1, constructionHistory=0)
+            cmds.polySubdivideFacet(temp_face, divisionsU=1, divisionsV=2, subdMethod=1, constructionHistory=0)
             self.setVertexPosition(wrap_fold_pln[0], 41, wrap_points['I1c'][0])
             self.setVertexPosition(wrap_fold_pln[0], 40, wrap_points['I1a'][0])
             self.setVertexPosition(wrap_fold_pln[0], 39, wrap_points['F1c'][0])
@@ -952,25 +960,25 @@ class GiftWrap(object):
         Helper function to create a pivot locator and cluster
         """
         # Create locator
-        pivot = [mc.spaceLocator(position=pivot_pos, name=f'gift_{wid}_pivot_{pivot_key}'), None]
-        pivot[1] = mc.listRelatives(pivot[0], shapes=True)[0]
+        pivot = [cmds.spaceLocator(position=pivot_pos, name=f'gift_{wid}_pivot_{pivot_key}'), None]
+        pivot[1] = cmds.listRelatives(pivot[0], shapes=True)[0]
         
         # Create group
-        mc.select(pivot[0])
-        pivot_group = mc.group(name=f'GRP_gift_{wid}_pivot_{pivot_key}')
+        cmds.select(pivot[0])
+        pivot_group = cmds.group(name=f'GRP_gift_{wid}_pivot_{pivot_key}')
         
         # Set rotation
         if len(rotate_values) == 1:
-            mc.setAttr(f'{pivot_group}.rotateY', rotate_values[0])
+            cmds.setAttr(f'{pivot_group}.rotateY', rotate_values[0])
         else:
-            mc.setAttr(f'{pivot_group}.rotate', rotate_values[0], rotate_values[1], rotate_values[2], type='double3')
+            cmds.setAttr(f'{pivot_group}.rotate', rotate_values[0], rotate_values[1], rotate_values[2], type='double3')
         
-        mc.xform(pivot[0], centerPivots=True)
+        cmds.xform(pivot[0], centerPivots=True)
         
         # Create cluster
-        mc.select(vertices)
-        cluster = mc.cluster(name=f'gift_{wid}_cluster_{pivot_key}')
-        mc.parent(cluster[1], pivot[0])
+        cmds.select(vertices)
+        cluster = cmds.cluster(name=f'gift_{wid}_cluster_{pivot_key}')
+        cmds.parent(cluster[1], pivot[0])
         
         return pivot, pivot_group
 
@@ -979,11 +987,11 @@ class GiftWrap(object):
         """
         Helper function to create a simple cluster with just a rotation pivot
         """
-        mc.select(vertices)
-        cluster = mc.cluster(name=f'gift_{wid}_cluster_{cluster_key}')
-        mc.xform(cluster[1], rotatePivot=pivot_pos)
+        cmds.select(vertices)
+        cluster = cmds.cluster(name=f'gift_{wid}_cluster_{cluster_key}')
+        cmds.xform(cluster[1], rotatePivot=pivot_pos)
         
-        weighted_node = mc.ls(selection=True)[0]
+        weighted_node = cmds.ls(selection=True)[0]
         
         return cluster, weighted_node
 
@@ -1003,7 +1011,7 @@ class GiftWrap(object):
         if not self.wrap_overlap:
             vertices_x8 = self.getVerticesForRow(mesh_name, points, '8')
 
-        mc.select(d=True)
+        cmds.select(d=True)
 
         # 1st fold
         # Upper
@@ -1016,9 +1024,9 @@ class GiftWrap(object):
             vertices_1U.append(self.getVertexFromPoint(self.f_plane[0], points, 'F1c'))
             vertices_1U.append(self.getVertexFromPoint(self.f_plane[0], points, 'I1c'))
         
-        mc.select(vertices_1U)
-        cluster_1U = mc.cluster(name='gift_%s_cluster_1U' % self.wrap_id)
-        mc.xform(cluster_1U[1], rotatePivot=self.pivots['1U'])
+        cmds.select(vertices_1U)
+        cluster_1U = cmds.cluster(name='gift_%s_cluster_1U' % self.wrap_id)
+        cmds.xform(cluster_1U[1], rotatePivot=self.pivots['1U'])
         self.pivots['1U'] = cluster_1U[1]
         
         # Lower
@@ -1031,9 +1039,9 @@ class GiftWrap(object):
             vertices_1B.append(self.getVertexFromPoint(self.f_plane[0], points, 'F7b'))
             vertices_1B.append(self.getVertexFromPoint(self.f_plane[0], points, 'I7b'))
         
-        mc.select(vertices_1B)
-        cluster_1B = mc.cluster(name='gift_%s_cluster_1B' % self.wrap_id)
-        mc.xform(cluster_1B[1], rotatePivot=self.pivots['1B'])
+        cmds.select(vertices_1B)
+        cluster_1B = cmds.cluster(name='gift_%s_cluster_1B' % self.wrap_id)
+        cmds.xform(cluster_1B[1], rotatePivot=self.pivots['1B'])
         self.pivots['1B'] = cluster_1B[1]
 
         # 2nd fold
@@ -1047,9 +1055,9 @@ class GiftWrap(object):
             vertices_2U.append(self.getVertexFromPoint(self.f_plane[0], points, 'F1c'))
             vertices_2U.append(self.getVertexFromPoint(self.f_plane[0], points, 'I1c'))
         
-        mc.select(vertices_2U)
-        cluster_2U = mc.cluster(name='gift_%s_cluster_2U' % self.wrap_id)
-        mc.xform(cluster_2U[1], rotatePivot=self.pivots['2U'])
+        cmds.select(vertices_2U)
+        cluster_2U = cmds.cluster(name='gift_%s_cluster_2U' % self.wrap_id)
+        cmds.xform(cluster_2U[1], rotatePivot=self.pivots['2U'])
         self.pivots['2U'] = cluster_2U[1]
         
         # Lower
@@ -1062,9 +1070,9 @@ class GiftWrap(object):
             vertices_2B.append(self.getVertexFromPoint(self.f_plane[0], points, 'F7b'))
             vertices_2B.append(self.getVertexFromPoint(self.f_plane[0], points, 'I7b'))
         
-        mc.select(vertices_2B)
-        cluster_2B = mc.cluster(name='gift_%s_cluster_2B' % self.wrap_id)
-        mc.xform(cluster_2B[1], rotatePivot=self.pivots['2B'])
+        cmds.select(vertices_2B)
+        cluster_2B = cmds.cluster(name='gift_%s_cluster_2B' % self.wrap_id)
+        cmds.xform(cluster_2B[1], rotatePivot=self.pivots['2B'])
         self.pivots['2B'] = cluster_2B[1]
 
         # 3rd fold
@@ -1198,22 +1206,22 @@ class GiftWrap(object):
         cluster_5L, self.pivots['5L'] = self.createSimpleCluster(self.wrap_id, '5L', vertices_5L, self.pivots['5L'])
 
         # Parent to main cluster group
-        mc.parent(cluster_1U[1], self.cluster_group_name)
-        mc.parent(cluster_1B[1], self.cluster_group_name)
-        mc.parent(cluster_2U[1], self.cluster_group_name)
-        mc.parent(cluster_2B[1], self.cluster_group_name)
-        mc.parent(pivot_3UR_group, self.cluster_group_name)
-        mc.parent(pivot_3UL_group, self.cluster_group_name)
-        mc.parent(pivot_3BR_group, self.cluster_group_name)
-        mc.parent(pivot_3BL_group, self.cluster_group_name)
-        mc.parent(pivot_4UR_group, self.cluster_group_name)
-        mc.parent(pivot_4UL_group, self.cluster_group_name)
-        mc.parent(pivot_4BR_group, self.cluster_group_name)
-        mc.parent(pivot_4BL_group, self.cluster_group_name)
-        mc.parent(cluster_5R[1], self.cluster_group_name)
-        mc.parent(cluster_5L[1], self.cluster_group_name)
-        mc.parent(cluster_6R[1], self.cluster_group_name)
-        mc.parent(cluster_6L[1], self.cluster_group_name)
+        cmds.parent(cluster_1U[1], self.cluster_group_name)
+        cmds.parent(cluster_1B[1], self.cluster_group_name)
+        cmds.parent(cluster_2U[1], self.cluster_group_name)
+        cmds.parent(cluster_2B[1], self.cluster_group_name)
+        cmds.parent(pivot_3UR_group, self.cluster_group_name)
+        cmds.parent(pivot_3UL_group, self.cluster_group_name)
+        cmds.parent(pivot_3BR_group, self.cluster_group_name)
+        cmds.parent(pivot_3BL_group, self.cluster_group_name)
+        cmds.parent(pivot_4UR_group, self.cluster_group_name)
+        cmds.parent(pivot_4UL_group, self.cluster_group_name)
+        cmds.parent(pivot_4BR_group, self.cluster_group_name)
+        cmds.parent(pivot_4BL_group, self.cluster_group_name)
+        cmds.parent(cluster_5R[1], self.cluster_group_name)
+        cmds.parent(cluster_5L[1], self.cluster_group_name)
+        cmds.parent(cluster_6R[1], self.cluster_group_name)
+        cmds.parent(cluster_6L[1], self.cluster_group_name)
 
     @staticmethod
     def idGenerator(size=4, chars=string.ascii_uppercase + string.digits):
@@ -1223,7 +1231,7 @@ class GiftWrap(object):
     @staticmethod
     def get_weighted_node(cluster_node):
         """Gets transform node weighted by the given cluster (pymel getWeightedNode)"""
-        deformer_set = mc.listConnections(cluster_node, type='objectSet')
+        deformer_set = cmds.listConnections(cluster_node, type='objectSet')
         return deformer_set[0].split('.')[0]
 
     def foldPaper(self, folds=17):
@@ -1232,323 +1240,323 @@ class GiftWrap(object):
         folds = number of folds to perform
         """
         if folds >= 1:
-            mc.setAttr(self.pivots['1B'] + '.rotateX', -90)
+            cmds.setAttr(self.pivots['1B'] + '.rotateX', -90)
         if folds >= 2:
-            mc.setAttr(self.pivots['2B'] + '.rotateX', -90)
+            cmds.setAttr(self.pivots['2B'] + '.rotateX', -90)
         if folds >= 3:
-            mc.setAttr(self.pivots['1U'] + '.rotateX', 90)
+            cmds.setAttr(self.pivots['1U'] + '.rotateX', 90)
         if folds >= 4:
-            mc.setAttr(self.pivots['2U'] + '.rotateX', 89.8)
+            cmds.setAttr(self.pivots['2U'] + '.rotateX', 89.8)
         if folds >= 5:
-            mc.setAttr(self.pivots['3UL'][0][0] + '.rotateX', 178)
-            mc.setAttr(self.pivots['3UL'][0][0] + '.translateX', self.fold_fix)
-            mc.setAttr(self.pivots['3UL'][0][0] + '.translateY', 0)
-            mc.setAttr(self.pivots['3UL'][0][0] + '.translateZ', 0)
+            cmds.setAttr(self.pivots['3UL'][0][0] + '.rotateX', 178)
+            cmds.setAttr(self.pivots['3UL'][0][0] + '.translateX', self.fold_fix)
+            cmds.setAttr(self.pivots['3UL'][0][0] + '.translateY', 0)
+            cmds.setAttr(self.pivots['3UL'][0][0] + '.translateZ', 0)
         if folds >= 6:
-            mc.setAttr(self.pivots['3BL'][0][0] + '.rotateX', 178)
-            mc.setAttr(self.pivots['3BL'][0][0] + '.translateX', self.fold_fix * -1)
-            mc.setAttr(self.pivots['3BL'][0][0] + '.translateY', 0)
-            mc.setAttr(self.pivots['3BL'][0][0] + '.translateZ', 0)
+            cmds.setAttr(self.pivots['3BL'][0][0] + '.rotateX', 178)
+            cmds.setAttr(self.pivots['3BL'][0][0] + '.translateX', self.fold_fix * -1)
+            cmds.setAttr(self.pivots['3BL'][0][0] + '.translateY', 0)
+            cmds.setAttr(self.pivots['3BL'][0][0] + '.translateZ', 0)
         if folds >= 7:
-            mc.setAttr(self.pivots['3UR'][0][0] + '.rotateX', 178)
-            mc.setAttr(self.pivots['3UR'][0][0] + '.translateX', self.fold_fix * -1)
-            mc.setAttr(self.pivots['3UR'][0][0] + '.translateY', 0)
-            mc.setAttr(self.pivots['3UR'][0][0] + '.translateZ', 0)
+            cmds.setAttr(self.pivots['3UR'][0][0] + '.rotateX', 178)
+            cmds.setAttr(self.pivots['3UR'][0][0] + '.translateX', self.fold_fix * -1)
+            cmds.setAttr(self.pivots['3UR'][0][0] + '.translateY', 0)
+            cmds.setAttr(self.pivots['3UR'][0][0] + '.translateZ', 0)
         if folds >= 8:
-            mc.setAttr(self.pivots['3BR'][0][0] + '.rotateX', 178)
-            mc.setAttr(self.pivots['3BR'][0][0] + '.translateX', self.fold_fix)
-            mc.setAttr(self.pivots['3BR'][0][0] + '.translateY', 0)
-            mc.setAttr(self.pivots['3BR'][0][0] + '.translateZ', 0)
+            cmds.setAttr(self.pivots['3BR'][0][0] + '.rotateX', 178)
+            cmds.setAttr(self.pivots['3BR'][0][0] + '.translateX', self.fold_fix)
+            cmds.setAttr(self.pivots['3BR'][0][0] + '.translateY', 0)
+            cmds.setAttr(self.pivots['3BR'][0][0] + '.translateZ', 0)
         if folds >= 9:
-            mc.setAttr(self.pivots['4UL'][0][0] + '.rotateX', 178)
+            cmds.setAttr(self.pivots['4UL'][0][0] + '.rotateX', 178)
         if folds >= 10:
-            mc.setAttr(self.pivots['4BL'][0][0] + '.rotateX', 178)
+            cmds.setAttr(self.pivots['4BL'][0][0] + '.rotateX', 178)
         if folds >= 11:
-            mc.setAttr(self.pivots['4UR'][0][0] + '.rotateX', 178)
+            cmds.setAttr(self.pivots['4UR'][0][0] + '.rotateX', 178)
         if folds >= 12:
-            mc.setAttr(self.pivots['4BR'][0][0] + '.rotateX', 178)
+            cmds.setAttr(self.pivots['4BR'][0][0] + '.rotateX', 178)
         if folds >= 13:
-                                    mc.setAttr(self.pivots['5L'] + '.rotateZ', 86)
+                                    cmds.setAttr(self.pivots['5L'] + '.rotateZ', 86)
         if folds >= 14:
-            mc.setAttr(self.pivots['5R'] + '.rotateZ', -86)
+            cmds.setAttr(self.pivots['5R'] + '.rotateZ', -86)
         if folds >= 15:
-            mc.setAttr(self.pivots['6L'] + '.rotateZ', -84)
+            cmds.setAttr(self.pivots['6L'] + '.rotateZ', -84)
         if folds >= 16:
-            mc.setAttr(self.pivots['6R'] + '.rotateZ', 84)
+            cmds.setAttr(self.pivots['6R'] + '.rotateZ', 84)
         if folds == 0:
-            mc.setAttr(self.pivots['1B'] + '.rotateX', 0)
-            mc.setAttr(self.pivots['1B'] + '.rotateY', 0)
-            mc.setAttr(self.pivots['1B'] + '.rotateZ', 0)
+            cmds.setAttr(self.pivots['1B'] + '.rotateX', 0)
+            cmds.setAttr(self.pivots['1B'] + '.rotateY', 0)
+            cmds.setAttr(self.pivots['1B'] + '.rotateZ', 0)
         if folds < 2:
-            mc.setAttr(self.pivots['2B'] + '.rotateX', 0)
-            mc.setAttr(self.pivots['2B'] + '.rotateY', 0)
-            mc.setAttr(self.pivots['2B'] + '.rotateZ', 0)
+            cmds.setAttr(self.pivots['2B'] + '.rotateX', 0)
+            cmds.setAttr(self.pivots['2B'] + '.rotateY', 0)
+            cmds.setAttr(self.pivots['2B'] + '.rotateZ', 0)
         if folds < 3:
-            mc.setAttr(self.pivots['1U'] + '.rotateX', 0)
-            mc.setAttr(self.pivots['1U'] + '.rotateY', 0)
-            mc.setAttr(self.pivots['1U'] + '.rotateZ', 0)
+            cmds.setAttr(self.pivots['1U'] + '.rotateX', 0)
+            cmds.setAttr(self.pivots['1U'] + '.rotateY', 0)
+            cmds.setAttr(self.pivots['1U'] + '.rotateZ', 0)
         if folds < 4:
-            mc.setAttr(self.pivots['2U'] + '.rotateX', 0)
-            mc.setAttr(self.pivots['2U'] + '.rotateY', 0)
-            mc.setAttr(self.pivots['2U'] + '.rotateZ', 0)
+            cmds.setAttr(self.pivots['2U'] + '.rotateX', 0)
+            cmds.setAttr(self.pivots['2U'] + '.rotateY', 0)
+            cmds.setAttr(self.pivots['2U'] + '.rotateZ', 0)
         if folds < 5:
-            mc.setAttr(self.pivots['3UL'][0][0] + '.rotateX', 0)
-            mc.setAttr(self.pivots['3UL'][0][0] + '.rotateY', 0)
-            mc.setAttr(self.pivots['3UL'][0][0] + '.rotateZ', 0)
-            mc.setAttr(self.pivots['3UL'][0][0] + '.translateX', 0)
-            mc.setAttr(self.pivots['3UL'][0][0] + '.translateY', 0)
-            mc.setAttr(self.pivots['3UL'][0][0] + '.translateZ', 0)
+            cmds.setAttr(self.pivots['3UL'][0][0] + '.rotateX', 0)
+            cmds.setAttr(self.pivots['3UL'][0][0] + '.rotateY', 0)
+            cmds.setAttr(self.pivots['3UL'][0][0] + '.rotateZ', 0)
+            cmds.setAttr(self.pivots['3UL'][0][0] + '.translateX', 0)
+            cmds.setAttr(self.pivots['3UL'][0][0] + '.translateY', 0)
+            cmds.setAttr(self.pivots['3UL'][0][0] + '.translateZ', 0)
         if folds < 6:
-            mc.setAttr(self.pivots['3BL'][0][0] + '.rotateX', 0)
-            mc.setAttr(self.pivots['3BL'][0][0] + '.rotateY', 0)
-            mc.setAttr(self.pivots['3BL'][0][0] + '.rotateZ', 0)
-            mc.setAttr(self.pivots['3BL'][0][0] + '.translateX', 0)
-            mc.setAttr(self.pivots['3BL'][0][0] + '.translateY', 0)
-            mc.setAttr(self.pivots['3BL'][0][0] + '.translateZ', 0)
+            cmds.setAttr(self.pivots['3BL'][0][0] + '.rotateX', 0)
+            cmds.setAttr(self.pivots['3BL'][0][0] + '.rotateY', 0)
+            cmds.setAttr(self.pivots['3BL'][0][0] + '.rotateZ', 0)
+            cmds.setAttr(self.pivots['3BL'][0][0] + '.translateX', 0)
+            cmds.setAttr(self.pivots['3BL'][0][0] + '.translateY', 0)
+            cmds.setAttr(self.pivots['3BL'][0][0] + '.translateZ', 0)
         if folds < 7:
-            mc.setAttr(self.pivots['3UR'][0][0] + '.rotateX', 0)
-            mc.setAttr(self.pivots['3UR'][0][0] + '.rotateY', 0)
-            mc.setAttr(self.pivots['3UR'][0][0] + '.rotateZ', 0)
-            mc.setAttr(self.pivots['3UR'][0][0] + '.translateX', 0)
-            mc.setAttr(self.pivots['3UR'][0][0] + '.translateY', 0)
-            mc.setAttr(self.pivots['3UR'][0][0] + '.translateZ', 0)
+            cmds.setAttr(self.pivots['3UR'][0][0] + '.rotateX', 0)
+            cmds.setAttr(self.pivots['3UR'][0][0] + '.rotateY', 0)
+            cmds.setAttr(self.pivots['3UR'][0][0] + '.rotateZ', 0)
+            cmds.setAttr(self.pivots['3UR'][0][0] + '.translateX', 0)
+            cmds.setAttr(self.pivots['3UR'][0][0] + '.translateY', 0)
+            cmds.setAttr(self.pivots['3UR'][0][0] + '.translateZ', 0)
         if folds < 8:
-            mc.setAttr(self.pivots['3BR'][0][0] + '.rotateX', 0)
-            mc.setAttr(self.pivots['3BR'][0][0] + '.rotateY', 0)
-            mc.setAttr(self.pivots['3BR'][0][0] + '.rotateZ', 0)
-            mc.setAttr(self.pivots['3BR'][0][0] + '.translateX', 0)
-            mc.setAttr(self.pivots['3BR'][0][0] + '.translateY', 0)
-            mc.setAttr(self.pivots['3BR'][0][0] + '.translateZ', 0)
+            cmds.setAttr(self.pivots['3BR'][0][0] + '.rotateX', 0)
+            cmds.setAttr(self.pivots['3BR'][0][0] + '.rotateY', 0)
+            cmds.setAttr(self.pivots['3BR'][0][0] + '.rotateZ', 0)
+            cmds.setAttr(self.pivots['3BR'][0][0] + '.translateX', 0)
+            cmds.setAttr(self.pivots['3BR'][0][0] + '.translateY', 0)
+            cmds.setAttr(self.pivots['3BR'][0][0] + '.translateZ', 0)
         if folds < 9:
-            mc.setAttr(self.pivots['4UL'][0][0] + '.rotateX', 0)
-            mc.setAttr(self.pivots['4UL'][0][0] + '.rotateY', 0)
-            mc.setAttr(self.pivots['4UL'][0][0] + '.rotateZ', 0)
+            cmds.setAttr(self.pivots['4UL'][0][0] + '.rotateX', 0)
+            cmds.setAttr(self.pivots['4UL'][0][0] + '.rotateY', 0)
+            cmds.setAttr(self.pivots['4UL'][0][0] + '.rotateZ', 0)
         if folds < 10:
-            mc.setAttr(self.pivots['4BL'][0][0] + '.rotateX', 0)
-            mc.setAttr(self.pivots['4BL'][0][0] + '.rotateY', 0)
-            mc.setAttr(self.pivots['4BL'][0][0] + '.rotateZ', 0)
+            cmds.setAttr(self.pivots['4BL'][0][0] + '.rotateX', 0)
+            cmds.setAttr(self.pivots['4BL'][0][0] + '.rotateY', 0)
+            cmds.setAttr(self.pivots['4BL'][0][0] + '.rotateZ', 0)
         if folds < 11:
-            mc.setAttr(self.pivots['4UR'][0][0] + '.rotateX', 0)
-            mc.setAttr(self.pivots['4UR'][0][0] + '.rotateY', 0)
-            mc.setAttr(self.pivots['4UR'][0][0] + '.rotateZ', 0)
+            cmds.setAttr(self.pivots['4UR'][0][0] + '.rotateX', 0)
+            cmds.setAttr(self.pivots['4UR'][0][0] + '.rotateY', 0)
+            cmds.setAttr(self.pivots['4UR'][0][0] + '.rotateZ', 0)
         if folds < 12:
-            mc.setAttr(self.pivots['4BR'][0][0] + '.rotateX', 0)
-            mc.setAttr(self.pivots['4BR'][0][0] + '.rotateY', 0)
-            mc.setAttr(self.pivots['4BR'][0][0] + '.rotateZ', 0)
+            cmds.setAttr(self.pivots['4BR'][0][0] + '.rotateX', 0)
+            cmds.setAttr(self.pivots['4BR'][0][0] + '.rotateY', 0)
+            cmds.setAttr(self.pivots['4BR'][0][0] + '.rotateZ', 0)
         if folds < 13:
-            mc.setAttr(self.pivots['5L'] + '.rotateX', 0)
-            mc.setAttr(self.pivots['5L'] + '.rotateY', 0)
-            mc.setAttr(self.pivots['5L'] + '.rotateZ', 0)
+            cmds.setAttr(self.pivots['5L'] + '.rotateX', 0)
+            cmds.setAttr(self.pivots['5L'] + '.rotateY', 0)
+            cmds.setAttr(self.pivots['5L'] + '.rotateZ', 0)
         if folds < 14:
-            mc.setAttr(self.pivots['5R'] + '.rotateX', 0)
-            mc.setAttr(self.pivots['5R'] + '.rotateY', 0)
-            mc.setAttr(self.pivots['5R'] + '.rotateZ', 0)
+            cmds.setAttr(self.pivots['5R'] + '.rotateX', 0)
+            cmds.setAttr(self.pivots['5R'] + '.rotateY', 0)
+            cmds.setAttr(self.pivots['5R'] + '.rotateZ', 0)
         if folds < 15:
-            mc.setAttr(self.pivots['6L'] + '.rotateX', 0)
-            mc.setAttr(self.pivots['6L'] + '.rotateY', 0)
-            mc.setAttr(self.pivots['6L'] + '.rotateZ', 0)
+            cmds.setAttr(self.pivots['6L'] + '.rotateX', 0)
+            cmds.setAttr(self.pivots['6L'] + '.rotateY', 0)
+            cmds.setAttr(self.pivots['6L'] + '.rotateZ', 0)
         if folds < 16:
-            mc.setAttr(self.pivots['6R'] + '.rotateX', 0)
-            mc.setAttr(self.pivots['6R'] + '.rotateY', 0)
-            mc.setAttr(self.pivots['6R'] + '.rotateZ', 0)
+            cmds.setAttr(self.pivots['6R'] + '.rotateX', 0)
+            cmds.setAttr(self.pivots['6R'] + '.rotateY', 0)
+            cmds.setAttr(self.pivots['6R'] + '.rotateZ', 0)
 
     def setDrivenKeys(self, anim=0):
         """
         Connect the wrapping to the animation attribute of the control handle.
         """
         self.foldPaper(0)
-        mc.setAttr(self.ctrl_handle[0] + '.animation', 0)
-        mc.setDrivenKeyframe(self.pivots['1B'] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setAttr(self.ctrl_handle[0] + '.animation', 0)
+        cmds.setDrivenKeyframe(self.pivots['1B'] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
     
-        mc.setAttr(self.ctrl_handle[0] + '.animation', 1)
+        cmds.setAttr(self.ctrl_handle[0] + '.animation', 1)
         self.foldPaper(1)
-        mc.setDrivenKeyframe(self.pivots['1B'] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.pivots['2B'] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['1B'] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['2B'] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
     
-        mc.setAttr(self.ctrl_handle[0] + '.animation', 2)
+        cmds.setAttr(self.ctrl_handle[0] + '.animation', 2)
         self.foldPaper(2)
-        mc.setDrivenKeyframe(self.pivots['2B'] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.pivots['1U'] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['2B'] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['1U'] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
     
-        mc.setAttr(self.ctrl_handle[0] + '.animation', 3)
+        cmds.setAttr(self.ctrl_handle[0] + '.animation', 3)
         self.foldPaper(3)
-        mc.setDrivenKeyframe(self.pivots['1U'] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.pivots['2U'] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['1U'] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['2U'] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
     
-        mc.setAttr(self.ctrl_handle[0] + '.animation', 4)
+        cmds.setAttr(self.ctrl_handle[0] + '.animation', 4)
         self.foldPaper(4)
-        mc.setDrivenKeyframe(self.pivots['2U'] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.pivots['3UL'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.pivots['3UL'][0][0] + '.translateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['2U'] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['3UL'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['3UL'][0][0] + '.translateX', currentDriver=self.ctrl_handle[0] + '.animation')
     
-        mc.setAttr(self.ctrl_handle[0] + '.animation', 4.5)
+        cmds.setAttr(self.ctrl_handle[0] + '.animation', 4.5)
         self.foldPaper(5)
-        mc.setDrivenKeyframe(self.pivots['3UL'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.pivots['3UL'][0][0] + '.translateX', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.pivots['3BL'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.pivots['3BL'][0][0] + '.translateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['3UL'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['3UL'][0][0] + '.translateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['3BL'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['3BL'][0][0] + '.translateX', currentDriver=self.ctrl_handle[0] + '.animation')
     
-        mc.setAttr(self.ctrl_handle[0] + '.animation', 5)
+        cmds.setAttr(self.ctrl_handle[0] + '.animation', 5)
         self.foldPaper(6)
-        mc.setDrivenKeyframe(self.pivots['3BL'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.pivots['3BL'][0][0] + '.translateX', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.pivots['3UR'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.pivots['3UR'][0][0] + '.translateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['3BL'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['3BL'][0][0] + '.translateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['3UR'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['3UR'][0][0] + '.translateX', currentDriver=self.ctrl_handle[0] + '.animation')
     
-        mc.setAttr(self.ctrl_handle[0] + '.animation', 5.5)
+        cmds.setAttr(self.ctrl_handle[0] + '.animation', 5.5)
         self.foldPaper(7)
-        mc.setDrivenKeyframe(self.pivots['3UR'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.pivots['3UR'][0][0] + '.translateX', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.pivots['3BR'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.pivots['3BR'][0][0] + '.translateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['3UR'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['3UR'][0][0] + '.translateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['3BR'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['3BR'][0][0] + '.translateX', currentDriver=self.ctrl_handle[0] + '.animation')
     
-        mc.setAttr(self.ctrl_handle[0] + '.animation', 6)
+        cmds.setAttr(self.ctrl_handle[0] + '.animation', 6)
         self.foldPaper(8)
-        mc.setDrivenKeyframe(self.pivots['3BR'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.pivots['3BR'][0][0] + '.translateX', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.pivots['4UL'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['3BR'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['3BR'][0][0] + '.translateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['4UL'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
     
-        mc.setAttr(self.ctrl_handle[0] + '.animation', 6.5)
+        cmds.setAttr(self.ctrl_handle[0] + '.animation', 6.5)
         self.foldPaper(9)
-        mc.setDrivenKeyframe(self.pivots['4UL'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.pivots['4BL'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['4UL'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['4BL'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
     
-        mc.setAttr(self.ctrl_handle[0] + '.animation', 7)
+        cmds.setAttr(self.ctrl_handle[0] + '.animation', 7)
         self.foldPaper(10)
-        mc.setDrivenKeyframe(self.pivots['4BL'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.pivots['4UR'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['4BL'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['4UR'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
     
-        mc.setAttr(self.ctrl_handle[0] + '.animation', 7.5)
+        cmds.setAttr(self.ctrl_handle[0] + '.animation', 7.5)
         self.foldPaper(11)
-        mc.setDrivenKeyframe(self.pivots['4UR'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.pivots['4BR'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['4UR'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['4BR'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
     
-        mc.setAttr(self.ctrl_handle[0] + '.animation', 8)
+        cmds.setAttr(self.ctrl_handle[0] + '.animation', 8)
         self.foldPaper(12)
-        mc.setDrivenKeyframe(self.pivots['4BR'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.pivots['5L'] + '.rotateZ', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['4BR'][0][0] + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['5L'] + '.rotateZ', currentDriver=self.ctrl_handle[0] + '.animation')
     
-        mc.setAttr(self.ctrl_handle[0] + '.animation', 8.5)
+        cmds.setAttr(self.ctrl_handle[0] + '.animation', 8.5)
         self.foldPaper(13)
-        mc.setDrivenKeyframe(self.pivots['5L'] + '.rotateZ', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.pivots['5R'] + '.rotateZ', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['5L'] + '.rotateZ', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['5R'] + '.rotateZ', currentDriver=self.ctrl_handle[0] + '.animation')
     
-        mc.setAttr(self.ctrl_handle[0] + '.animation', 9)
+        cmds.setAttr(self.ctrl_handle[0] + '.animation', 9)
         self.foldPaper(14)
-        mc.setDrivenKeyframe(self.pivots['5R'] + '.rotateZ', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.pivots['6L'] + '.rotateZ', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['5R'] + '.rotateZ', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['6L'] + '.rotateZ', currentDriver=self.ctrl_handle[0] + '.animation')
     
-        mc.setAttr(self.ctrl_handle[0] + '.animation', 9.5)
+        cmds.setAttr(self.ctrl_handle[0] + '.animation', 9.5)
         self.foldPaper(15)
-        mc.setDrivenKeyframe(self.pivots['6L'] + '.rotateZ', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.pivots['6R'] + '.rotateZ', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['6L'] + '.rotateZ', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['6R'] + '.rotateZ', currentDriver=self.ctrl_handle[0] + '.animation')
     
-        mc.setAttr(self.ctrl_handle[0] + '.animation', 10)
+        cmds.setAttr(self.ctrl_handle[0] + '.animation', 10)
         self.foldPaper(16)
     
         # Bbox
-        bbox = mc.exactWorldBoundingBox(self.wrap_gift)
+        bbox = cmds.exactWorldBoundingBox(self.wrap_gift)
         bbox_min = [bbox[0], bbox[1], bbox[2]]
         bbox_max = [bbox[3], bbox[4], bbox[5]]
         bbox_minmax = [bbox_max[0] - bbox_min[0], bbox_max[1] - bbox_min[1], bbox_max[2] - bbox_min[2]]
     
-        mc.setAttr(self.gift_group_name + '.translateY', 0)
-        mc.setAttr(self.gift_group_name + '.rotateX', 0)
-        mc.xform(self.gift_group_name, centerPivots=True)
+        cmds.setAttr(self.gift_group_name + '.translateY', 0)
+        cmds.setAttr(self.gift_group_name + '.rotateX', 0)
+        cmds.xform(self.gift_group_name, centerPivots=True)
     
-        mc.setDrivenKeyframe(self.pivots['6R'] + '.rotateZ', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.gift_group_name + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.gift_group_name + '.translateY', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.pivots['6R'] + '.rotateZ', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.gift_group_name + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.gift_group_name + '.translateY', currentDriver=self.ctrl_handle[0] + '.animation')
     
-        mc.setAttr(self.ctrl_handle[0] + '.animation', 10.5)
-        mc.setAttr(self.gift_group_name + '.translateY', bbox_minmax[1]/2)
-        mc.setDrivenKeyframe(self.gift_group_name + '.translateY', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setAttr(self.ctrl_handle[0] + '.animation', 10.5)
+        cmds.setAttr(self.gift_group_name + '.translateY', bbox_minmax[1]/2)
+        cmds.setDrivenKeyframe(self.gift_group_name + '.translateY', currentDriver=self.ctrl_handle[0] + '.animation')
     
-        mc.setAttr(self.ctrl_handle[0] + '.animation', 11)
-        mc.setAttr(self.gift_group_name + '.rotateX', 180)
-        mc.setAttr(self.gift_group_name + '.translateY', 0)
+        cmds.setAttr(self.ctrl_handle[0] + '.animation', 11)
+        cmds.setAttr(self.gift_group_name + '.rotateX', 180)
+        cmds.setAttr(self.gift_group_name + '.translateY', 0)
         self.tieRibbon(0)
-        mc.setDrivenKeyframe(self.gift_group_name + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.gift_group_name + '.translateY', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.ribbons['1U'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.ribbons['1D'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.gift_group_name + '.rotateX', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.gift_group_name + '.translateY', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.ribbons['1U'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.ribbons['1D'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
     
-        mc.setAttr(self.ctrl_handle[0] + '.animation', 12)
+        cmds.setAttr(self.ctrl_handle[0] + '.animation', 12)
         self.tieRibbon(1)
-        mc.setDrivenKeyframe(self.ribbons['1U'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.ribbons['1D'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.ribbons['2L'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.ribbons['2R'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.ribbons['1U'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.ribbons['1D'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.ribbons['2L'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.ribbons['2R'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
     
-        mc.setAttr(self.ctrl_handle[0] + '.animation', 13)
+        cmds.setAttr(self.ctrl_handle[0] + '.animation', 13)
         self.tieRibbon(2)
-        mc.setDrivenKeyframe(self.ribbons['2L'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.ribbons['2R'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.ribbons['3L'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.ribbons['3R'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.ribbons['2L'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.ribbons['2R'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.ribbons['3L'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.ribbons['3R'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
     
-        mc.setAttr(self.ctrl_handle[0] + '.animation', 14)
+        cmds.setAttr(self.ctrl_handle[0] + '.animation', 14)
         self.tieRibbon(3)
-        mc.setDrivenKeyframe(self.ribbons['3L'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.ribbons['3R'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.ribbons['4'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.ribbons['3L'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.ribbons['3R'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.ribbons['4'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
     
-        mc.setAttr(self.ctrl_handle[0] + '.animation', 15)
+        cmds.setAttr(self.ctrl_handle[0] + '.animation', 15)
         self.tieRibbon(4)
-        mc.setDrivenKeyframe(self.ribbons['3L'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.ribbons['3R'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
-        mc.setDrivenKeyframe(self.ribbons['4'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.ribbons['3L'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.ribbons['3R'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
+        cmds.setDrivenKeyframe(self.ribbons['4'][2] + '.maxValue', currentDriver=self.ctrl_handle[0] + '.animation')
     
-        mc.setAttr(self.ctrl_handle[0] + '.animation', anim)
+        cmds.setAttr(self.ctrl_handle[0] + '.animation', anim)
 
     def setAnimation(self, anim_s=None, anim_e=None):
         if anim_s is None:
             anim_s = self.animation_start
         else:
             self.animation_start = anim_s
-            mc.setAttr(self.ctrl_handle[0] + '.animation_start', self.animation_start)
+            cmds.setAttr(self.ctrl_handle[0] + '.animation_start', self.animation_start)
         
         if anim_e is None:
             anim_e = self.animation_end
         else:
             self.animation_end = anim_e
-            mc.setAttr(self.ctrl_handle[0] + '.animation_end', self.animation_end)
+            cmds.setAttr(self.ctrl_handle[0] + '.animation_end', self.animation_end)
         
         # Remove existing animation keys
-        mc.cutKey(self.ctrl_handle[0], attribute='animation', clear=True)
+        cmds.cutKey(self.ctrl_handle[0], attribute='animation', clear=True)
         
         # Set new animation keys if start and end are different
         if not anim_s == anim_e:
-            mc.setKeyframe(self.ctrl_handle[0], attribute='animation', value=0, time=anim_s)
-            mc.setKeyframe(self.ctrl_handle[0], attribute='animation', value=15, time=anim_e)
+            cmds.setKeyframe(self.ctrl_handle[0], attribute='animation', value=0, time=anim_s)
+            cmds.setKeyframe(self.ctrl_handle[0], attribute='animation', value=15, time=anim_e)
 
     def createPaper(self, plane, thickness):
         """
         Creates a wrapping paper mesh which is then controlled by the
         folding plane using a wrap deformer.
         """
-        paper = mc.duplicate(plane, name='wrap_paper_%s' % self.wrap_id)
+        paper = cmds.duplicate(plane, name='wrap_paper_%s' % self.wrap_id)
 
         # Make hipoly
-        mc.polyBevel(paper, offset=0.005, constructionHistory=0)
-        mc.polySubdivideFacet(paper, divisions=1, divisionsV=1, subdMethod=0, constructionHistory=0)
+        cmds.polyBevel(paper, offset=0.005, constructionHistory=0)
+        cmds.polySubdivideFacet(paper, divisions=1, divisionsV=1, subdMethod=0, constructionHistory=0)
 
         # Move pivot and translate
-        mc.move(0, thickness/2, 0, paper[0] + '.rotatePivot', relative=True)
-        mc.setAttr(paper[0] + '.translateY', -0.5 * thickness)
+        cmds.move(0, thickness/2, 0, paper[0] + '.rotatePivot', relative=True)
+        cmds.setAttr(paper[0] + '.translateY', -0.5 * thickness)
         
         # Extrude
-        mc.polyExtrudeFacet(paper, translateY=(thickness * 1), constructionHistory=0)
+        cmds.polyExtrudeFacet(paper, translateY=(thickness * 1), constructionHistory=0)
         
         # UV mapping
-        verts = mc.polyEvaluate(paper[0], face=True) - 1
+        verts = cmds.polyEvaluate(paper[0], face=True) - 1
         evalthis = 'polyProjection -ch 0 -type Planar -ibd on -kir -md y ' + str(paper[0]) + '.f[0:' + str(verts) +']'
         mel.eval(evalthis)  # UV planar map
 
         # Create wrap deformer
-        mc.select(clear=True)
-        mc.select(paper, plane)
-        mc.CreateWrap()
+        cmds.select(clear=True)
+        cmds.select(paper, plane)
+        cmds.CreateWrap()
         
         return paper
 
@@ -1906,60 +1914,60 @@ class GiftWrap(object):
             r_points['knot_5'][0]
         ]
 
-        curve_1U = mc.curve(p=crv_list_1U, n='ribbon_1U_crv_%s' % self.wrap_id)
-        curve_1D = mc.curve(p=crv_list_1D, n='ribbon_1D_crv_%s' % self.wrap_id)
-        curve_2L = mc.curve(p=crv_list_2L, n='ribbon_2L_crv_%s' % self.wrap_id)
-        curve_2R = mc.curve(p=crv_list_2R, n='ribbon_2R_crv_%s' % self.wrap_id)
-        curve_3L = mc.curve(p=crv_list_3L, n='ribbon_3L_crv_%s' % self.wrap_id)
-        curve_3R = mc.curve(p=crv_list_3R, n='ribbon_3R_crv_%s' % self.wrap_id)
-        curve_4 = mc.curve(p=crv_list_4, n='ribbon_4_crv_%s' % self.wrap_id)
+        curve_1U = cmds.curve(p=crv_list_1U, n='ribbon_1U_crv_%s' % self.wrap_id)
+        curve_1D = cmds.curve(p=crv_list_1D, n='ribbon_1D_crv_%s' % self.wrap_id)
+        curve_2L = cmds.curve(p=crv_list_2L, n='ribbon_2L_crv_%s' % self.wrap_id)
+        curve_2R = cmds.curve(p=crv_list_2R, n='ribbon_2R_crv_%s' % self.wrap_id)
+        curve_3L = cmds.curve(p=crv_list_3L, n='ribbon_3L_crv_%s' % self.wrap_id)
+        curve_3R = cmds.curve(p=crv_list_3R, n='ribbon_3R_crv_%s' % self.wrap_id)
+        curve_4 = cmds.curve(p=crv_list_4, n='ribbon_4_crv_%s' % self.wrap_id)
 
         r_prof_1D = self.createRibbonProfile(r_type, r_width, r_thickness)
 
         # Place ribbon profile curves
-        mc.xform(r_prof_1D, centerPivots=True)
-        mc.move(r_points['U'][0][0], r_points['U'][0][1], r_points['U'][0][2], r_prof_1D)
-        r_prof_1U = mc.instance(r_prof_1D, n='ribbon_1U_profile_' + self.wrap_id)[0]
-        mc.setAttr(r_prof_1U + '.rotateY', 180) # Essentially flips normals
+        cmds.xform(r_prof_1D, centerPivots=True)
+        cmds.move(r_points['U'][0][0], r_points['U'][0][1], r_points['U'][0][2], r_prof_1D)
+        r_prof_1U = cmds.instance(r_prof_1D, n='ribbon_1U_profile_' + self.wrap_id)[0]
+        cmds.setAttr(r_prof_1U + '.rotateY', 180) # Essentially flips normals
         
-        r_prof_2R = mc.instance(r_prof_1D, n='ribbon_2R_profile_' + self.wrap_id)[0]
-        mc.setAttr(r_prof_2R + '.rotateY', 90)
-        mc.setAttr(r_prof_2R + '.translateY', r_points['D'][0][1])
-        r_prof_2L = mc.instance(r_prof_2R, n='ribbon_2L_profile_' + self.wrap_id)[0]
-        mc.setAttr(r_prof_2L + '.rotateY', -90)
+        r_prof_2R = cmds.instance(r_prof_1D, n='ribbon_2R_profile_' + self.wrap_id)[0]
+        cmds.setAttr(r_prof_2R + '.rotateY', 90)
+        cmds.setAttr(r_prof_2R + '.translateY', r_points['D'][0][1])
+        r_prof_2L = cmds.instance(r_prof_2R, n='ribbon_2L_profile_' + self.wrap_id)[0]
+        cmds.setAttr(r_prof_2L + '.rotateY', -90)
 
         # Place bow profile and path curves
         bow_rot = 5
-        r_prof_3L = mc.instance(r_prof_1D, n='ribbon_3L_profile_' + self.wrap_id)[0]
-        mc.setAttr(r_prof_3L + '.rotateY', -90 - bow_rot)
-        mc.setAttr(curve_3L + '.rotateY', 0 - bow_rot)
+        r_prof_3L = cmds.instance(r_prof_1D, n='ribbon_3L_profile_' + self.wrap_id)[0]
+        cmds.setAttr(r_prof_3L + '.rotateY', -90 - bow_rot)
+        cmds.setAttr(curve_3L + '.rotateY', 0 - bow_rot)
         
-        r_prof_3R = mc.instance(r_prof_1D, n='ribbon_3R_profile_' + self.wrap_id)[0]
-        mc.setAttr(r_prof_3R + '.rotateY', 90 + bow_rot)
-        mc.setAttr(curve_3R + '.rotateY', 0 + bow_rot)
+        r_prof_3R = cmds.instance(r_prof_1D, n='ribbon_3R_profile_' + self.wrap_id)[0]
+        cmds.setAttr(r_prof_3R + '.rotateY', 90 + bow_rot)
+        cmds.setAttr(curve_3R + '.rotateY', 0 + bow_rot)
         
-        r_prof_4 = mc.instance(r_prof_1D, n='ribbon_4_profile_' + self.wrap_id)[0]
-        mc.setAttr(r_prof_4 + '.translateZ', r_width / 2)
-        mc.setAttr(r_prof_4 + '.rotateX', -90)
+        r_prof_4 = cmds.instance(r_prof_1D, n='ribbon_4_profile_' + self.wrap_id)[0]
+        cmds.setAttr(r_prof_4 + '.translateZ', r_width / 2)
+        cmds.setAttr(r_prof_4 + '.rotateX', -90)
 
         # Extrusions
-        r_extrude_1U = mc.extrude(r_prof_1U, curve_1U, et=2, rn=True, n='ribbon_ext_1U' + self.wrap_id)
-        r_extrude_1D = mc.extrude(r_prof_1D, curve_1D, et=2, rn=True, n='ribbon_ext_1D' + self.wrap_id)
-        r_extrude_2L = mc.extrude(r_prof_2L, curve_2L, et=2, rn=True, n='ribbon_ext_2L' + self.wrap_id)
-        r_extrude_2R = mc.extrude(r_prof_2R, curve_2R, et=2, rn=True, n='ribbon_ext_2R' + self.wrap_id)
-        r_extrude_3L = mc.extrude(r_prof_3L, curve_3L, et=2, rn=True, n='ribbon_ext_3L' + self.wrap_id)
-        r_extrude_3R = mc.extrude(r_prof_3R, curve_3R, et=2, rn=True, n='ribbon_ext_3R' + self.wrap_id)
-        r_extrude_4 = mc.extrude(r_prof_4, curve_4, et=2, rn=True, n='ribbon_ext_4' + self.wrap_id)
+        r_extrude_1U = cmds.extrude(r_prof_1U, curve_1U, et=2, rn=True, n='ribbon_ext_1U' + self.wrap_id)
+        r_extrude_1D = cmds.extrude(r_prof_1D, curve_1D, et=2, rn=True, n='ribbon_ext_1D' + self.wrap_id)
+        r_extrude_2L = cmds.extrude(r_prof_2L, curve_2L, et=2, rn=True, n='ribbon_ext_2L' + self.wrap_id)
+        r_extrude_2R = cmds.extrude(r_prof_2R, curve_2R, et=2, rn=True, n='ribbon_ext_2R' + self.wrap_id)
+        r_extrude_3L = cmds.extrude(r_prof_3L, curve_3L, et=2, rn=True, n='ribbon_ext_3L' + self.wrap_id)
+        r_extrude_3R = cmds.extrude(r_prof_3R, curve_3R, et=2, rn=True, n='ribbon_ext_3R' + self.wrap_id)
+        r_extrude_4 = cmds.extrude(r_prof_4, curve_4, et=2, rn=True, n='ribbon_ext_4' + self.wrap_id)
 
         # Make ribbons taper
-        mc.setAttr(r_extrude_3L[0] + '.scaleX', 0.8)
-        mc.setAttr(r_extrude_3R[0] + '.scaleZ', 0.8)
+        cmds.setAttr(r_extrude_3L[0] + '.scaleX', 0.8)
+        cmds.setAttr(r_extrude_3R[0] + '.scaleZ', 0.8)
         
         ribbons = {}
         
         # Helper function to get subCurve from extrude node
         def getSubCrv(extrude_node, subcurve_index=1):
-            connections = mc.listConnections(extrude_node, type='subCurve')
+            connections = cmds.listConnections(extrude_node, type='subCurve')
             if connections and len(connections) > subcurve_index:
                 return connections[subcurve_index]
             return None
@@ -1973,57 +1981,57 @@ class GiftWrap(object):
         ribbons['4'] = [curve_4, r_extrude_4, getSubCrv(r_extrude_4)]
 
         # Parent to main ribbon group - curves
-        mc.parent(curve_1U, self.r_curve_group_name)
-        mc.parent(curve_1D, self.r_curve_group_name)
-        mc.parent(curve_2L, self.r_curve_group_name)
-        mc.parent(curve_2R, self.r_curve_group_name)
-        mc.parent(curve_3L, self.r_curve_group_name)
-        mc.parent(curve_3R, self.r_curve_group_name)
-        mc.parent(curve_4, self.r_curve_group_name)
+        cmds.parent(curve_1U, self.r_curve_group_name)
+        cmds.parent(curve_1D, self.r_curve_group_name)
+        cmds.parent(curve_2L, self.r_curve_group_name)
+        cmds.parent(curve_2R, self.r_curve_group_name)
+        cmds.parent(curve_3L, self.r_curve_group_name)
+        cmds.parent(curve_3R, self.r_curve_group_name)
+        cmds.parent(curve_4, self.r_curve_group_name)
         
         # Parent extruded ribbons to group
-        mc.parent(r_extrude_1U, self.ribbon_group_name)
-        mc.parent(r_extrude_1D, self.ribbon_group_name)
-        mc.parent(r_extrude_2L, self.ribbon_group_name)
-        mc.parent(r_extrude_2R, self.ribbon_group_name)
-        mc.parent(r_extrude_3L, self.ribbon_group_name)
-        mc.parent(r_extrude_3R, self.ribbon_group_name)
-        mc.parent(r_extrude_4, self.ribbon_group_name)
+        cmds.parent(r_extrude_1U, self.ribbon_group_name)
+        cmds.parent(r_extrude_1D, self.ribbon_group_name)
+        cmds.parent(r_extrude_2L, self.ribbon_group_name)
+        cmds.parent(r_extrude_2R, self.ribbon_group_name)
+        cmds.parent(r_extrude_3L, self.ribbon_group_name)
+        cmds.parent(r_extrude_3R, self.ribbon_group_name)
+        cmds.parent(r_extrude_4, self.ribbon_group_name)
         
         # Parent profiles to group
-        mc.parent(r_prof_1U, self.r_curve_group_name)
-        mc.parent(r_prof_1D, self.r_curve_group_name)
-        mc.parent(r_prof_2L, self.r_curve_group_name)
-        mc.parent(r_prof_2R, self.r_curve_group_name)
-        mc.parent(r_prof_3L, self.r_curve_group_name)
-        mc.parent(r_prof_3R, self.r_curve_group_name)
-        mc.parent(r_prof_4, self.r_curve_group_name)
+        cmds.parent(r_prof_1U, self.r_curve_group_name)
+        cmds.parent(r_prof_1D, self.r_curve_group_name)
+        cmds.parent(r_prof_2L, self.r_curve_group_name)
+        cmds.parent(r_prof_2R, self.r_curve_group_name)
+        cmds.parent(r_prof_3L, self.r_curve_group_name)
+        cmds.parent(r_prof_3R, self.r_curve_group_name)
+        cmds.parent(r_prof_4, self.r_curve_group_name)
         
         return ribbons, r_prof_1D
 
     def createRibbonProfile(self, type, r_width, r_thickness):
         crv_suffix = 'ribbon_1D_profile_'
         if type == RibbonType.ROUND:
-            profile = mc.circle(n=crv_suffix + self.wrap_id)
-            mc.move(r_width/2, r_thickness/2, 0, profile + '.cv[0]')
-            mc.move(r_width/2, 0, 0, profile + '.cv[6]')
-            mc.move(r_width/2, -(r_thickness/2), 0, profile + '.cv[7]')
-            mc.move(0, r_thickness/2, 0, profile + '.cv[1]')
-            mc.move(-(r_width/2), r_thickness/2, 0, profile + '.cv[2]')
-            mc.move(-(r_width/2), 0, 0, profile + '.cv[3]')
-            mc.move(-(r_width/2), -(r_thickness/2), 0, profile + '.cv[4]')
-            mc.move(0, -(r_thickness/2), 0, profile + '.cv[5]')
+            profile = cmds.circle(n=crv_suffix + self.wrap_id)
+            cmds.move(r_width/2, r_thickness/2, 0, profile + '.cv[0]')
+            cmds.move(r_width/2, 0, 0, profile + '.cv[6]')
+            cmds.move(r_width/2, -(r_thickness/2), 0, profile + '.cv[7]')
+            cmds.move(0, r_thickness/2, 0, profile + '.cv[1]')
+            cmds.move(-(r_width/2), r_thickness/2, 0, profile + '.cv[2]')
+            cmds.move(-(r_width/2), 0, 0, profile + '.cv[3]')
+            cmds.move(-(r_width/2), -(r_thickness/2), 0, profile + '.cv[4]')
+            cmds.move(0, -(r_thickness/2), 0, profile + '.cv[5]')
         else:
-            profile = mc.circle(n=crv_suffix + self.wrap_id, sections=4, radius=r_width / 2, degree=1)[0]
-            mc.xform(profile, rotation=[0, 0, 45])
-            mc.makeIdentity(profile, apply=True)
-            mc.xform(profile, scale=[1, r_thickness, 1])
-            mc.makeIdentity(profile, apply=True)
+            profile = cmds.circle(n=crv_suffix + self.wrap_id, sections=4, radius=r_width / 2, degree=1)[0]
+            cmds.xform(profile, rotation=[0, 0, 45])
+            cmds.makeIdentity(profile, apply=True)
+            cmds.xform(profile, scale=[1, r_thickness, 1])
+            cmds.makeIdentity(profile, apply=True)
         return profile
 
     def getObjectSides(self):
         """Get height, width and depth from boundingbox of just the object"""
-        bbox = mc.exactWorldBoundingBox(self.wrap_gift)
+        bbox = cmds.exactWorldBoundingBox(self.wrap_gift)
         bbox_min = [bbox[0], bbox[1], bbox[2]]
         bbox_max = [bbox[3], bbox[4], bbox[5]]
         
@@ -2036,7 +2044,7 @@ class GiftWrap(object):
     
     def getWrapSides(self):
         """Get height, width and depth from boundingbox of the object wrapped in paper"""
-        bbox_minmax = mc.polyEvaluate(self.wrap_paper[0], boundingBox=True)
+        bbox_minmax = cmds.polyEvaluate(self.wrap_paper[0], boundingBox=True)
         
         # Calculate dimensions
         side_w = abs(bbox_minmax[0][1] - bbox_minmax[0][0])
@@ -2052,36 +2060,36 @@ class GiftWrap(object):
         """
         # Show ribbon segments based on value of seg
         if seg >= 1:
-            mc.setAttr(self.ribbons['1U'][2] + '.maxValue', 1)
-            mc.setAttr(self.ribbons['1D'][2] + '.maxValue', 1)
+            cmds.setAttr(self.ribbons['1U'][2] + '.maxValue', 1)
+            cmds.setAttr(self.ribbons['1D'][2] + '.maxValue', 1)
         if seg >= 2:
-            mc.setAttr(self.ribbons['2L'][2] + '.maxValue', 1)
-            mc.setAttr(self.ribbons['2R'][2] + '.maxValue', 1)
+            cmds.setAttr(self.ribbons['2L'][2] + '.maxValue', 1)
+            cmds.setAttr(self.ribbons['2R'][2] + '.maxValue', 1)
         if seg >= 3:
-            mc.setAttr(self.ribbons['3L'][2] + '.maxValue', 1)
-            mc.setAttr(self.ribbons['3R'][2] + '.maxValue', 1)
+            cmds.setAttr(self.ribbons['3L'][2] + '.maxValue', 1)
+            cmds.setAttr(self.ribbons['3R'][2] + '.maxValue', 1)
         if seg >= 4:
-            mc.setAttr(self.ribbons['4'][2] + '.maxValue', 1)
+            cmds.setAttr(self.ribbons['4'][2] + '.maxValue', 1)
     
         # Hide ribbon segments based on value of seg
         if seg == 0:
-            mc.setAttr(self.ribbons['1U'][2] + '.maxValue', 0)
-            mc.setAttr(self.ribbons['1D'][2] + '.maxValue', 0)
+            cmds.setAttr(self.ribbons['1U'][2] + '.maxValue', 0)
+            cmds.setAttr(self.ribbons['1D'][2] + '.maxValue', 0)
         if seg < 2:
-            mc.setAttr(self.ribbons['2L'][2] + '.maxValue', 0)
-            mc.setAttr(self.ribbons['2R'][2] + '.maxValue', 0)
+            cmds.setAttr(self.ribbons['2L'][2] + '.maxValue', 0)
+            cmds.setAttr(self.ribbons['2R'][2] + '.maxValue', 0)
         if seg < 3:
-            mc.setAttr(self.ribbons['3L'][2] + '.maxValue', 0)
-            mc.setAttr(self.ribbons['3R'][2] + '.maxValue', 0)
+            cmds.setAttr(self.ribbons['3L'][2] + '.maxValue', 0)
+            cmds.setAttr(self.ribbons['3R'][2] + '.maxValue', 0)
         if seg < 4:
-            mc.setAttr(self.ribbons['4'][2] + '.maxValue', 0)
+            cmds.setAttr(self.ribbons['4'][2] + '.maxValue', 0)
 
     def applyColor(self):
         """
         Set color of the wrapping paper and ribbon.
         """
         paper_shader = 'shd_paper_' + self.wrap_color.upper()
-        mc.sets(self.wrap_paper[0], edit=True, forceElement=paper_shader)
+        cmds.sets(self.wrap_paper[0], edit=True, forceElement=paper_shader)
         
         ribbon_shader = 'shd_ribbon_' + self.ribbon_color.upper()
         
@@ -2094,7 +2102,7 @@ class GiftWrap(object):
         
         # Apply shader to each ribbon element individually
         for r in ribbon:
-            mc.sets(r, edit=True, forceElement=ribbon_shader)
+            cmds.sets(r, edit=True, forceElement=ribbon_shader)
     
     def newColor(self, p_color='', r_color=''):
         """
@@ -2132,479 +2140,13 @@ class GiftWrap(object):
                 mult = 0.625
             
             for prof in self.ribbon_prof:
-                scale_x = mc.getAttr(prof + '.scaleX')
+                scale_x = cmds.getAttr(prof + '.scaleX')
                 new_scale_x = scale_x * mult
-                mc.setAttr(prof + '.scaleX', new_scale_x)
+                cmds.setAttr(prof + '.scaleX', new_scale_x)
 
     def reloadGiftWrap(self):
         self.removeGiftWrap()
         self.createGiftWrap(self.wrap_gift)
-
-def windowUI():
-    win_w = 300
-    col_x_4 = win_w / 4
-    
-    # Create main window
-    if mc.window('giftGeneratorWindow', exists=True):
-        mc.deleteUI('giftGeneratorWindow')
-    my_window = mc.window('giftGeneratorWindow', title='Gift Generator', rtf=True, width=win_w)
-    
-    # Main layout
-    main_layout = mc.columnLayout(rowSpacing=10)
-    
-    # Wrap Gift frame
-    wrap_frame = mc.frameLayout(label='Wrap Gift',
-                                width=win_w, collapsable=True, collapse=False)
-    
-    # Wrap layout
-    wrap_layout = mc.columnLayout(parent=wrap_frame)
-    
-    # Wrap row for size
-    wrap_row_size = mc.rowLayout(
-        numberOfColumns=4,
-        columnWidth4=(col_x_4, col_x_4, col_x_4-5, col_x_4),
-        parent=wrap_layout
-    )
-    mc.text(' Paper weight:', parent=wrap_row_size)
-    wrap_sld_thk = mc.floatSliderGrp(
-        minValue=0.005, maxValue=0.05, value=0.02, parent=wrap_row_size
-    )
-    mc.text('Ribbon size:', parent=wrap_row_size)
-    wrap_opt_menu_r_size = mc.optionMenu(parent=wrap_row_size, width=col_x_4-5)
-    mc.menuItem(label='Large', parent=wrap_opt_menu_r_size)
-    mc.menuItem(label='Medium', parent=wrap_opt_menu_r_size)
-    mc.menuItem(label='Small', parent=wrap_opt_menu_r_size)
-    
-    # Wrap row for color
-    mc.setParent(wrap_layout)
-    wrap_row_color = mc.rowLayout(
-        numberOfColumns=4,
-        columnWidth4=(col_x_4, col_x_4, col_x_4-5, col_x_4)
-    )
-    mc.text(' Paper color:', parent=wrap_row_color)
-    wrap_opt_menu_p_color = mc.optionMenu(parent=wrap_row_color)
-    mc.menuItem(label='Random', parent=wrap_opt_menu_p_color)
-    mc.menuItem(label='Red', parent=wrap_opt_menu_p_color)
-    mc.menuItem(label='Green', parent=wrap_opt_menu_p_color)
-    mc.menuItem(label='Blue', parent=wrap_opt_menu_p_color)
-    mc.menuItem(label='Yellow', parent=wrap_opt_menu_p_color)
-    mc.menuItem(label='Black', parent=wrap_opt_menu_p_color)
-    mc.menuItem(label='White', parent=wrap_opt_menu_p_color)
-    
-    mc.text('Ribbon color:', parent=wrap_row_color)
-    wrap_opt_menu_r_color = mc.optionMenu(parent=wrap_row_color, width=col_x_4-5)
-    mc.menuItem(label='Random', parent=wrap_opt_menu_r_color)
-    mc.menuItem(label='Red', parent=wrap_opt_menu_r_color)
-    mc.menuItem(label='Green', parent=wrap_opt_menu_r_color)
-    mc.menuItem(label='Blue', parent=wrap_opt_menu_r_color)
-    mc.menuItem(label='Yellow', parent=wrap_opt_menu_r_color)
-    
-    # Separator
-    mc.setParent(wrap_layout)
-    mc.separator(height=10, width=win_w, style='in')
-
-    # Animation row
-    mc.text(' Animation', font='smallBoldLabelFont')
-    wrap_row_anim = mc.rowLayout(numberOfColumns=4, columnWidth4=(col_x_4, col_x_4, col_x_4-5, col_x_4))
-    mc.text('Start frame:', width=col_x_4, align='right', parent=wrap_row_anim)
-    wrap_int_anim_s = mc.intField(minValue=0, width=45, value=1, parent=wrap_row_anim)
-    mc.text('End frame:', width=col_x_4, align='right', parent=wrap_row_anim)
-    wrap_int_anim_e = mc.intField(minValue=0, width=45, value=24, parent=wrap_row_anim)
-
-    # Orientation and placement
-    indent_row = mc.rowLayout(
-        parent=wrap_layout, numberOfColumns=2, columnWidth2=(10, win_w - 10))
-    mc.text("", parent=indent_row)
-    orient_frame = mc.frameLayout(
-        label='    Orientation and Placement', parent=indent_row,
-        width=win_w, collapsable=True, collapse=True, bgc=(0.2,0.2,0.2))
-    orient_layout = mc.columnLayout(parent=orient_frame)
-    orient_row_ori_up = mc.rowLayout(numberOfColumns=4, columnWidth4=(col_x_4, col_x_4, col_x_4-40, col_x_4))
-    mc.text('Orientation:', width=col_x_4, align='right', parent=orient_row_ori_up)
-    orient_opt_menu_ori = mc.optionMenu(parent=orient_row_ori_up)
-    mc.menuItem(label='World', parent=orient_opt_menu_ori)
-    mc.menuItem(label='Object', parent=orient_opt_menu_ori)
-    mc.optionMenu(orient_opt_menu_ori, e=True, sl=2)
-
-    largest_side_label = 'Largest side'
-    mc.text('Up:', parent=orient_row_ori_up, align='right', width=30)
-    orient_opt_menu_up = mc.optionMenu(parent=orient_row_ori_up, width=col_x_4 + 15)
-    mc.menuItem(label='X', parent=orient_opt_menu_up)
-    mc.menuItem(label='Y', parent=orient_opt_menu_up)
-    mc.menuItem(label='Z', parent=orient_opt_menu_up)
-    mc.menuItem(label=largest_side_label, parent=orient_opt_menu_up)
-    mc.optionMenu(orient_opt_menu_up, e=True, sl=2)
-
-    mc.setParent(orient_frame)
-    orient_row_inv_up = mc.rowLayout(numberOfColumns=2, columnWidth2=(col_x_4 * 3 - 30, col_x_4))
-    mc.text("")
-    wrap_tgl_inv_up = mc.checkBox('Invert', value=True, parent=orient_row_inv_up)
-
-    # Separator
-    mc.setParent(orient_frame)
-    mc.separator(height=5, width=win_w, style='in')
-
-    label_auto_instant = 'Instant'
-    mc.setParent(orient_frame)
-    orient_row_auto_rib = mc.rowLayout(
-        numberOfColumns=2, columnWidth2=(col_x_4 * 2, col_x_4* 2)
-    )
-    orient_menu_auto = mc.optionMenu(
-        label='Auto place:',
-        parent=orient_row_auto_rib,
-        annotation='Place the object with its largest side down before wrapping.\n'
-                   'When set to "{}", the object will simply have the correct\n'
-                   'placement at the start of the animation.'.format(label_auto_instant)
-    )
-    mc.menuItem(label='Disabled', parent=orient_menu_auto)
-    mc.menuItem(label='Animated', parent=orient_menu_auto)
-    mc.menuItem(label=label_auto_instant, parent=orient_menu_auto)
-
-    label_flip = 'Flip Gift'
-    label_flip_tie_btm = 'Bottom'
-    label_flip_tie_top = 'Top'
-    mc.setParent(orient_frame)
-    orient_row_flip = mc.rowLayout(
-        numberOfColumns=2, columnWidth2=(col_x_4 * 2, col_x_4* 2)
-    )
-    orient_menu_rib = mc.optionMenu(
-        label='Ribbon:',
-        parent=orient_row_auto_rib,
-        annotation='- When set to "{flp}", an animation is added where the gift is flipped\n'
-                   '  around before tying the ribbon.\n'
-                   '- When set to "{top}", the knot of the ribbon is tied on the side of the\n'
-                   '  gift that has a visible seam.\n'
-                   '- When set to "{btm}", the knot of the ribbon is tied on the side of the\n'
-                   '  gift that has no visible seam but faces down. '.format(
-                       flp=label_flip, top=label_flip_tie_top, btm=label_flip_tie_btm
-                   )
-    )
-    mc.menuItem(label=label_flip, parent=orient_menu_rib)
-    mc.menuItem(label=label_flip_tie_top, parent=orient_menu_rib)
-    mc.menuItem(label=label_flip_tie_btm, parent=orient_menu_rib)
-
-    # Helper function to toggle the status of the auto-placement menu
-    def update_auto_menu():
-        auto_possible = (
-                mc.optionMenu(orient_opt_menu_up, query=True, value=True)
-                != largest_side_label
-        )
-        mc.optionMenu(orient_menu_auto, edit=True, enable=auto_possible)
-
-    update_auto_menu()
-
-    mc.optionMenu(orient_opt_menu_up, edit=True,
-        changeCommand=lambda *args: update_auto_menu())
-
-    # Separator
-    mc.setParent(wrap_layout)
-    mc.separator(height=10, width=win_w, style='in')
-
-    # Button row
-    wrap_row_btn = mc.rowLayout(numberOfColumns=2, columnWidth2=(win_w/2-30, win_w/2-30))
-    mc.text('', parent=wrap_row_btn)
-    wrap_btn_run = mc.button(label='Wrap', width=60, parent=wrap_row_btn)
-    
-    # Info text
-    mc.setParent(wrap_layout)
-    mc.text('Wraps selected object(s), animates the whole process\n' +
-            'by adjusting the connected attribute of the control handle',
-            font='obliqueLabelFont', align='center', width=win_w-10)
-    
-    # Modify Wrap frame
-    mc.setParent(main_layout)
-    mod_frame = mc.frameLayout(label='Modify Wrap',
-                              width=win_w, collapsable=True, collapse=True)
-    
-    # Modify layout
-    mod_layout = mc.columnLayout(parent=mod_frame)
-    
-    # Scan buttons row
-    mod_row_scan_btn = mc.rowLayout(numberOfColumns=3, columnWidth3=(15, win_w/2-15, win_w/2-10), parent=mod_layout)
-    mc.text('', parent=mod_row_scan_btn)
-    mod_btn_scan_sel = mc.button(label='Scan selection', width=120, parent=mod_row_scan_btn)
-    mod_btn_scan_scn = mc.button(label='Scan scene', width=100, parent=mod_row_scan_btn)
-    
-    # Info text
-    mc.setParent(mod_layout)
-    mc.text('Scans for gifts that have already been wrapped',
-            font='obliqueLabelFont', align='center', width=win_w)
-    mc.separator(height=10, width=win_w, style='in')
-    mc.text(' Result:', font='smallBoldLabelFont')
-    
-    # Results list
-    mod_txt_list = mc.textScrollList(numberOfRows=8, allowMultiSelection=True,
-                                    width=win_w-5, height=150, font='smallFixedWidthFont')
-    
-    # Paper weight section
-    mc.text(' Paper Weight:', font='smallBoldLabelFont')
-    mod_row_pweight = mc.rowLayout(numberOfColumns=2, columnWidth2=(200, 100))
-    mod_sld_thk = mc.floatSliderGrp(minValue=0.005, maxValue=0.05, value=0.02, 
-                                    field=True, width=180, precision=3, 
-                                    columnWidth2=(50, 130), parent=mod_row_pweight)
-    mod_btn_pweight = mc.button(label='Edit', width=80, parent=mod_row_pweight)
-    
-    # Separator
-    mc.setParent(mod_layout)
-    mc.separator(height=10, width=win_w, style='in')
-    
-    # Color header row
-    mod_row_color_hdr = mc.rowLayout(numberOfColumns=3, columnWidth3=(100, 100, 80))
-    mc.text(' Paper color:', font='tinyBoldLabelFont', parent=mod_row_color_hdr)
-    mc.text('Ribbon color:', font='tinyBoldLabelFont', parent=mod_row_color_hdr)
-    mc.text(' ', parent=mod_row_color_hdr)
-    
-    # Color options row
-    mc.setParent(mod_layout)
-    mod_row_color = mc.rowLayout(numberOfColumns=3, columnWidth3=(100, 100, 80))
-    mod_opt_menu_p_color = mc.optionMenu(parent=mod_row_color)
-    mc.menuItem(label='Random', parent=mod_opt_menu_p_color)
-    mc.menuItem(label='Red', parent=mod_opt_menu_p_color)
-    mc.menuItem(label='Green', parent=mod_opt_menu_p_color)
-    mc.menuItem(label='Blue', parent=mod_opt_menu_p_color)
-    mc.menuItem(label='Yellow', parent=mod_opt_menu_p_color)
-    mc.menuItem(label='Black', parent=mod_opt_menu_p_color)
-    mc.menuItem(label='White', parent=mod_opt_menu_p_color)
-    mc.menuItem(label='Current', parent=mod_opt_menu_p_color)
-    
-    mod_opt_menu_r_color = mc.optionMenu(parent=mod_row_color)
-    mc.menuItem(label='Random', parent=mod_opt_menu_r_color)
-    mc.menuItem(label='Red', parent=mod_opt_menu_r_color)
-    mc.menuItem(label='Green', parent=mod_opt_menu_r_color)
-    mc.menuItem(label='Blue', parent=mod_opt_menu_r_color)
-    mc.menuItem(label='Yellow', parent=mod_opt_menu_r_color)
-    mc.menuItem(label='Current', parent=mod_opt_menu_r_color)
-    
-    mod_btn_color = mc.button(label='Edit', width=80, parent=mod_row_color)
-    
-    # Separator
-    mc.setParent(mod_layout)
-    mc.separator(height=10, width=win_w, style='in')
-    mc.text(' Ribbon size:', font='tinyBoldLabelFont')
-    
-    # Ribbon size row
-    mod_row_r_sz = mc.rowLayout(numberOfColumns=2, columnWidth2=(200, 80))
-    mod_radio_r_sz = mc.radioButtonGrp(labelArray3=['Small', 'Medium', 'Large'], 
-                                       numberOfRadioButtons=3, columnWidth3=(60, 60, 60), 
-                                       select=3, parent=mod_row_r_sz)
-    mod_btn_r_sz = mc.button(label='Edit', width=80, parent=mod_row_r_sz)
-    
-    # Separator
-    mc.setParent(mod_layout)
-    mc.separator(height=10, width=win_w, style='in')
-    
-    # Animation header row
-    mod_row_anim_hdr = mc.rowLayout(numberOfColumns=3, columnWidth3=(100, 100, 80))
-    mc.text(' Anim. start:', font='tinyBoldLabelFont', parent=mod_row_anim_hdr)
-    mc.text('Anim. end:', font='tinyBoldLabelFont', parent=mod_row_anim_hdr)
-    mc.text(' ', parent=mod_row_anim_hdr)
-    
-    # Animation fields row
-    mc.setParent(mod_layout)
-    mod_row_anim = mc.rowLayout(numberOfColumns=3, columnWidth3=(100, 100, 80))
-    mod_int_anim_s = mc.intField(minValue=0, width=45, value=1, parent=mod_row_anim)
-    mod_int_anim_e = mc.intField(minValue=0, width=45, value=24, parent=mod_row_anim)
-    mod_btn_anim = mc.button(label='Edit', width=80, parent=mod_row_anim)
-    
-    # Set button commands
-    mc.button(wrap_btn_run, edit=True, 
-              command=lambda *args: runWrap(wrap_sld_thk, wrap_opt_menu_p_color,
-                                           wrap_opt_menu_r_size, wrap_opt_menu_r_color, 
-                                           wrap_int_anim_s, wrap_int_anim_e))
-    
-    mc.button(mod_btn_scan_sel, edit=True, 
-              command=lambda *args: scanForWraps(mod_txt_list, True))
-              
-    mc.button(mod_btn_scan_scn, edit=True, 
-              command=lambda *args: scanForWraps(mod_txt_list, False))
-              
-    mc.button(mod_btn_pweight, edit=True, 
-              command=lambda *args: editPaperWeight(mod_txt_list, mod_sld_thk))
-              
-    mc.button(mod_btn_color, edit=True, 
-              command=lambda *args: editColors(mod_txt_list, mod_opt_menu_p_color, mod_opt_menu_r_color))
-              
-    mc.button(mod_btn_r_sz, edit=True, 
-              command=lambda *args: editRibbonSize(mod_txt_list, mod_radio_r_sz))
-              
-    mc.button(mod_btn_anim, edit=True, 
-              command=lambda *args: editAnimation(mod_txt_list, mod_int_anim_s, mod_int_anim_e))
-              
-    mc.textScrollList(mod_txt_list, edit=True, 
-                     selectCommand=lambda *args: deselectHeader(mod_txt_list))
-    
-    # Show window
-    mc.showWindow(my_window)
-
-def deselectHeader(txt_list):
-    mc.textScrollList(txt_list, edit=True, deselectIndexedItem=[1, 2])
-
-def runWrap(p_thk, p_clr, r_sz, r_clr, an_s, an_e):
-    paper_thickness = mc.floatSliderGrp(p_thk, query=True, value=True)
-    paper_color = mc.optionMenu(p_clr, query=True, value=True).lower()
-    ribbon_size = mc.optionMenu(r_sz, query=True, value=True)[0]
-    ribbon_color = mc.optionMenu(r_clr, query=True, value=True).lower()
-    animation_start = mc.intField(an_s, query=True, value=True)
-    animation_end = mc.intField(an_e, query=True, value=True)
-    
-    objects = mc.ls(selection=True)
-    
-    for o in objects[:32]:
-        GiftWrap(
-            o, 'create', ribbon_size, paper_thickness, paper_color,
-            ribbon_color, animation_start, animation_end
-        )
-
-def scanForWraps(txt_list, _scan_mode, selection=None):
-    global wrap_list
-
-    _scan_mode = None # TODO: Implement `scan_mode`
-
-    if selection is None:
-        all_transforms = mc.ls(type='transform')
-        p_grp = re.compile('^.*_gift_wrap_[0-9A-Z]{5}_GRP$')
-        p_ctrl = re.compile('^CTRL_gift_[0-9A-Z]{5}$')
-
-        all_groups = filter(p_grp.match, all_transforms)
-        all_children = map(lambda g: mc.listRelatives(g, type='transform') or [], all_groups)
-        wrap_list = list(filter(p_ctrl.match, itertools.chain.from_iterable(all_children)))
-
-    mc.textScrollList(txt_list, edit=True, removeAll=True)
-    
-    # Titles
-    col1_title = addPadding('Object', 1)
-    col2_title = addPadding('ID', 2)
-    col3_title = addPadding('P. Weight', 3)
-    col4_title = addPadding('P. Color', 4)
-    col5_title = addPadding('R. Color', 5)
-    col6_title = addPadding('R. Size', 6)
-    col7_title = addPadding('Animation', 7)
-    
-    if len(wrap_list) > 0:
-        titles = col1_title + col2_title + col3_title + col4_title
-        titles += col5_title + col6_title + col7_title
-        mc.textScrollList(txt_list, edit=True, append=[titles])
-        
-        mc.textScrollList(txt_list, edit=True, append=[addPadding('-', 0)])
-        
-        for w in wrap_list:
-            wrap = GiftWrap(w, 'load')
-            wrap_name = addPadding(wrap.wrap_name, 1)
-            wrap_id = addPadding(wrap.wrap_id, 2)
-            paper_thickness = addPadding(str(wrap.wrap_thickness), 3)
-            paper_color = addPadding(wrap.wrap_color, 4)
-            ribbon_color = addPadding(wrap.ribbon_color, 5)
-            ribbon_size = addPadding(wrap.ribbon_size, 6)
-            animation = addPadding(str(wrap.animation_start) + ' - ' + str(wrap.animation_end), 7)
-            
-            attributes = wrap_name + wrap_id + paper_thickness
-            attributes += paper_color + ribbon_color + ribbon_size
-            attributes += animation
-            
-            mc.textScrollList(txt_list, edit=True, append=[attributes])
-        
-        if selection is None:
-            num_items = mc.textScrollList(txt_list, query=True, numberOfItems=True) + 1
-            for i in range(3, num_items):
-                mc.textScrollList(txt_list, edit=True, selectIndexedItem=i)
-        else:
-            for s in selection:
-                mc.textScrollList(txt_list, edit=True, selectIndexedItem=s+3)
-    else:
-        mc.textScrollList(txt_list, edit=True, append=['None found'])
-        mc.textScrollList(txt_list, edit=True, append=[addPadding(' ', 0)])
-
-def addPadding(text, column):
-    """
-    Add spaces to the given text in order to
-    align it properly in the scroll list.
-    """
-    # Column length
-    col_len = [0, 18, 8, 10, 10, 10, 10, 10]  # 0 to 7
-
-    if column == 0:
-        return text[:1] * ( sum(col_len) + 7)
-    else:
-        text = text[:col_len[column]]
-        padding = col_len[column] - len(text)
-        text += ' ' * (padding+1)
-
-        return text
-
-def editPaperWeight(txt_list, p_weight):
-    selection = removeHeader(txt_list)
-    
-    wrap_thickness = mc.floatSliderGrp(p_weight, query=True, value=True)
-    
-    if selection is not None:
-        for s in selection:
-            edit_gift = GiftWrap(wrap_list[s], 'load')
-            edit_gift.wrap_thickness = wrap_thickness
-            edit_gift.reloadGiftWrap()
-            wrap_list[s] = edit_gift.ctrl_handle[0]
-            
-        scanForWraps(txt_list, 0, selection)
-
-def editColors(txt_list, p_color, r_color):
-    selection = removeHeader(txt_list)
-    
-    wrap_color = mc.optionMenu(p_color, query=True, value=True).lower()
-    ribbon_color = mc.optionMenu(r_color, query=True, value=True).lower()
-    
-    if selection is not None:
-        for s in selection:
-            edit_gift = GiftWrap(wrap_list[s], 'load')
-            edit_gift.newColor(wrap_color, ribbon_color)
-        
-        scanForWraps(txt_list, 0, selection) # Refresh scroll list
-
-def editRibbonSize(txt_list, r_size):
-    selection = removeHeader(txt_list)
-    
-    r_size_value = mc.radioButtonGrp(r_size, query=True, select=True)
-    
-    if r_size_value == 1:
-        ribbon_size = 'S'
-    elif r_size_value == 2:
-        ribbon_size = 'M'
-    else:
-        ribbon_size = 'L'
-    
-    if selection is not None:
-        for s in selection:
-            edit_gift = GiftWrap(wrap_list[s], 'load')
-            edit_gift.changeRibbon(ribbon_size)
-        
-        scanForWraps(txt_list, 0, selection)
-
-def editAnimation(txt_list, anim_s, anim_e):
-    selection = removeHeader(txt_list)
-    
-    animation_start = mc.intField(anim_s, query=True, value=True)
-    animation_end = mc.intField(anim_e, query=True, value=True)
-    
-    if selection is not None:
-        for s in selection:
-            edit_gift = GiftWrap(wrap_list[s], 'load')
-            
-            edit_gift.setAnimation(animation_start, animation_end)
-        
-        scanForWraps(txt_list, 0, selection) # Refresh scroll list
-
-def removeHeader(txt_list):
-    """
-    Remove header from the selection so that it
-    corresponds to the wrap_list.
-    """
-    hdr_rows = 2  # Number of header rows
-    
-    items = mc.textScrollList(txt_list, query=True, selectIndexedItem=True)
-    
-    if not items:
-        return None
-    else:
-        gifts = [((hdr_rows + 1) * -1) + item for item in items]
-        return gifts
 
 def createShaders():
     """
@@ -2613,158 +2155,156 @@ def createShaders():
     # Ribbon Materials
     # Green Material
     rg_name = 'ribbon_GREEN'
-    if not mc.objExists('mat_' + rg_name):
-        mat_ribbon_green = mc.shadingNode('blinn', asShader=True, name='mat_' + rg_name)
-        mc.setAttr(mat_ribbon_green + '.color', 0.1, 0.6, 0.1, type='double3')
-        mc.setAttr(mat_ribbon_green + '.eccentricity', 0.6)
-        mc.setAttr(mat_ribbon_green + '.specularRollOff', 0.7)
+    if not cmds.objExists('mat_' + rg_name):
+        mat_ribbon_green = cmds.shadingNode('blinn', asShader=True, name='mat_' + rg_name)
+        cmds.setAttr(mat_ribbon_green + '.color', 0.1, 0.6, 0.1, type='double3')
+        cmds.setAttr(mat_ribbon_green + '.eccentricity', 0.6)
+        cmds.setAttr(mat_ribbon_green + '.specularRollOff', 0.7)
     else:
         mat_ribbon_green = 'mat_' + rg_name
         
     # Green Shader
-    if not mc.objExists('shd_' + rg_name):
-        shd_ribbon_green = mc.sets(renderable=True, noSurfaceShader=True, empty=True, name='shd_' + rg_name)
+    if not cmds.objExists('shd_' + rg_name):
+        shd_ribbon_green = cmds.sets(renderable=True, noSurfaceShader=True, empty=True, name='shd_' + rg_name)
         # Connect material to shader
-        mc.connectAttr(mat_ribbon_green + '.outColor', shd_ribbon_green + '.surfaceShader')
+        cmds.connectAttr(mat_ribbon_green + '.outColor', shd_ribbon_green + '.surfaceShader')
 
     # Red Material
     rr_name = 'ribbon_RED'
-    if not mc.objExists('mat_' + rr_name):
-        mat_ribbon_red = mc.shadingNode('blinn', asShader=True, name='mat_' + rr_name)
-        mc.setAttr(mat_ribbon_red + '.color', 0.6, 0.1, 0.1, type='double3')
-        mc.setAttr(mat_ribbon_red + '.eccentricity', 0.6)
-        mc.setAttr(mat_ribbon_red + '.specularRollOff', 0.7)
+    if not cmds.objExists('mat_' + rr_name):
+        mat_ribbon_red = cmds.shadingNode('blinn', asShader=True, name='mat_' + rr_name)
+        cmds.setAttr(mat_ribbon_red + '.color', 0.6, 0.1, 0.1, type='double3')
+        cmds.setAttr(mat_ribbon_red + '.eccentricity', 0.6)
+        cmds.setAttr(mat_ribbon_red + '.specularRollOff', 0.7)
     else:
         mat_ribbon_red = 'mat_' + rr_name
         
     # Red Shader
-    if not mc.objExists('shd_' + rr_name):
-        shd_ribbon_red = mc.sets(renderable=True, noSurfaceShader=True, empty=True, name='shd_' + rr_name)
+    if not cmds.objExists('shd_' + rr_name):
+        shd_ribbon_red = cmds.sets(renderable=True, noSurfaceShader=True, empty=True, name='shd_' + rr_name)
         # Connect material to shader
-        mc.connectAttr(mat_ribbon_red + '.outColor', shd_ribbon_red + '.surfaceShader')
+        cmds.connectAttr(mat_ribbon_red + '.outColor', shd_ribbon_red + '.surfaceShader')
 
     # Blue Material
     rb_name = 'ribbon_BLUE'
-    if not mc.objExists('mat_' + rb_name):
-        mat_ribbon_blue = mc.shadingNode('blinn', asShader=True, name='mat_' + rb_name)
-        mc.setAttr(mat_ribbon_blue + '.color', 0.1, 0.1, 0.6, type='double3')
-        mc.setAttr(mat_ribbon_blue + '.eccentricity', 0.6)
-        mc.setAttr(mat_ribbon_blue + '.specularRollOff', 0.7)
+    if not cmds.objExists('mat_' + rb_name):
+        mat_ribbon_blue = cmds.shadingNode('blinn', asShader=True, name='mat_' + rb_name)
+        cmds.setAttr(mat_ribbon_blue + '.color', 0.1, 0.1, 0.6, type='double3')
+        cmds.setAttr(mat_ribbon_blue + '.eccentricity', 0.6)
+        cmds.setAttr(mat_ribbon_blue + '.specularRollOff', 0.7)
     else:
         mat_ribbon_blue = 'mat_' + rb_name
         
     # Blue Shader
-    if not mc.objExists('shd_' + rb_name):
-        shd_ribbon_blue = mc.sets(renderable=True, noSurfaceShader=True, empty=True, name='shd_' + rb_name)
+    if not cmds.objExists('shd_' + rb_name):
+        shd_ribbon_blue = cmds.sets(renderable=True, noSurfaceShader=True, empty=True, name='shd_' + rb_name)
         # Connect material to shader
-        mc.connectAttr(mat_ribbon_blue + '.outColor', shd_ribbon_blue + '.surfaceShader')
+        cmds.connectAttr(mat_ribbon_blue + '.outColor', shd_ribbon_blue + '.surfaceShader')
 
     # Yellow Material
     ry_name = 'ribbon_YELLOW'
-    if not mc.objExists('mat_' + ry_name):
-        mat_ribbon_yellow = mc.shadingNode('blinn', asShader=True, name='mat_' + ry_name)
-        mc.setAttr(mat_ribbon_yellow + '.color', 0.8, 0.7, 0.1, type='double3')
-        mc.setAttr(mat_ribbon_yellow + '.eccentricity', 0.6)
-        mc.setAttr(mat_ribbon_yellow + '.specularRollOff', 0.7)
+    if not cmds.objExists('mat_' + ry_name):
+        mat_ribbon_yellow = cmds.shadingNode('blinn', asShader=True, name='mat_' + ry_name)
+        cmds.setAttr(mat_ribbon_yellow + '.color', 0.8, 0.7, 0.1, type='double3')
+        cmds.setAttr(mat_ribbon_yellow + '.eccentricity', 0.6)
+        cmds.setAttr(mat_ribbon_yellow + '.specularRollOff', 0.7)
     else:
         mat_ribbon_yellow = 'mat_' + ry_name
         
     # Yellow Shader
-    if not mc.objExists('shd_' + ry_name):
-        shd_ribbon_yellow = mc.sets(renderable=True, noSurfaceShader=True, empty=True, name='shd_' + ry_name)
+    if not cmds.objExists('shd_' + ry_name):
+        shd_ribbon_yellow = cmds.sets(renderable=True, noSurfaceShader=True, empty=True, name='shd_' + ry_name)
         # Connect material to shader
-        mc.connectAttr(mat_ribbon_yellow + '.outColor', shd_ribbon_yellow + '.surfaceShader')
+        cmds.connectAttr(mat_ribbon_yellow + '.outColor', shd_ribbon_yellow + '.surfaceShader')
 
     # Paper Materials
     # Green Material
     pg_name = 'paper_GREEN'
-    if not mc.objExists('mat_' + pg_name):
-        mat_paper_green = mc.shadingNode('lambert', asShader=True, name='mat_' + pg_name)
-        mc.setAttr(mat_paper_green + '.color', 0.2, 0.6, 0.2, type='double3')
-        mc.setAttr(mat_paper_green + '.diffuse', 1)
+    if not cmds.objExists('mat_' + pg_name):
+        mat_paper_green = cmds.shadingNode('lambert', asShader=True, name='mat_' + pg_name)
+        cmds.setAttr(mat_paper_green + '.color', 0.2, 0.6, 0.2, type='double3')
+        cmds.setAttr(mat_paper_green + '.diffuse', 1)
     else:
         mat_paper_green = 'mat_' + pg_name
         
     # Green Shader
-    if not mc.objExists('shd_' + pg_name):
-        shd_paper_green = mc.sets(renderable=True, noSurfaceShader=True, empty=True, name='shd_' + pg_name)
+    if not cmds.objExists('shd_' + pg_name):
+        shd_paper_green = cmds.sets(renderable=True, noSurfaceShader=True, empty=True, name='shd_' + pg_name)
         # Connect material to shader
-        mc.connectAttr(mat_paper_green + '.outColor', shd_paper_green + '.surfaceShader')
+        cmds.connectAttr(mat_paper_green + '.outColor', shd_paper_green + '.surfaceShader')
 
     # Red Material
     pr_name = 'paper_RED'
-    if not mc.objExists('mat_' + pr_name):
-        mat_paper_red = mc.shadingNode('lambert', asShader=True, name='mat_' + pr_name)
-        mc.setAttr(mat_paper_red + '.color', 0.8, 0.3, 0.3, type='double3')
-        mc.setAttr(mat_paper_red + '.diffuse', 1)
+    if not cmds.objExists('mat_' + pr_name):
+        mat_paper_red = cmds.shadingNode('lambert', asShader=True, name='mat_' + pr_name)
+        cmds.setAttr(mat_paper_red + '.color', 0.8, 0.3, 0.3, type='double3')
+        cmds.setAttr(mat_paper_red + '.diffuse', 1)
     else:
         mat_paper_red = 'mat_' + pr_name
         
     # Red Shader
-    if not mc.objExists('shd_' + pr_name):
-        shd_paper_red = mc.sets(renderable=True, noSurfaceShader=True, empty=True, name='shd_' + pr_name)
+    if not cmds.objExists('shd_' + pr_name):
+        shd_paper_red = cmds.sets(renderable=True, noSurfaceShader=True, empty=True, name='shd_' + pr_name)
         # Connect material to shader
-        mc.connectAttr(mat_paper_red + '.outColor', shd_paper_red + '.surfaceShader')
+        cmds.connectAttr(mat_paper_red + '.outColor', shd_paper_red + '.surfaceShader')
 
     # Blue Material
     pb_name = 'paper_BLUE'
-    if not mc.objExists('mat_' + pb_name):
-        mat_paper_blue = mc.shadingNode('lambert', asShader=True, name='mat_' + pb_name)
-        mc.setAttr(mat_paper_blue + '.color', 0.3, 0.3, 0.8, type='double3')
-        mc.setAttr(mat_paper_blue + '.diffuse', 1)
+    if not cmds.objExists('mat_' + pb_name):
+        mat_paper_blue = cmds.shadingNode('lambert', asShader=True, name='mat_' + pb_name)
+        cmds.setAttr(mat_paper_blue + '.color', 0.3, 0.3, 0.8, type='double3')
+        cmds.setAttr(mat_paper_blue + '.diffuse', 1)
     else:
         mat_paper_blue = 'mat_' + pb_name
         
     # Blue Shader
-    if not mc.objExists('shd_' + pb_name):
-        shd_paper_blue = mc.sets(renderable=True, noSurfaceShader=True, empty=True, name='shd_' + pb_name)
+    if not cmds.objExists('shd_' + pb_name):
+        shd_paper_blue = cmds.sets(renderable=True, noSurfaceShader=True, empty=True, name='shd_' + pb_name)
         # Connect material to shader
-        mc.connectAttr(mat_paper_blue + '.outColor', shd_paper_blue + '.surfaceShader')
+        cmds.connectAttr(mat_paper_blue + '.outColor', shd_paper_blue + '.surfaceShader')
 
     # Yellow Material
     py_name = 'paper_YELLOW'
-    if not mc.objExists('mat_' + py_name):
-        mat_paper_yellow = mc.shadingNode('lambert', asShader=True, name='mat_' + py_name)
-        mc.setAttr(mat_paper_yellow + '.color', 0.8, 0.75, 0.3, type='double3')
-        mc.setAttr(mat_paper_yellow + '.diffuse', 1)
+    if not cmds.objExists('mat_' + py_name):
+        mat_paper_yellow = cmds.shadingNode('lambert', asShader=True, name='mat_' + py_name)
+        cmds.setAttr(mat_paper_yellow + '.color', 0.8, 0.75, 0.3, type='double3')
+        cmds.setAttr(mat_paper_yellow + '.diffuse', 1)
     else:
         mat_paper_yellow = 'mat_' + py_name
         
     # Yellow Shader
-    if not mc.objExists('shd_' + py_name):
-        shd_paper_yellow = mc.sets(renderable=True, noSurfaceShader=True, empty=True, name='shd_' + py_name)
+    if not cmds.objExists('shd_' + py_name):
+        shd_paper_yellow = cmds.sets(renderable=True, noSurfaceShader=True, empty=True, name='shd_' + py_name)
         # Connect material to shader
-        mc.connectAttr(mat_paper_yellow + '.outColor', shd_paper_yellow + '.surfaceShader')
+        cmds.connectAttr(mat_paper_yellow + '.outColor', shd_paper_yellow + '.surfaceShader')
 
     # White Material
     pw_name = 'paper_WHITE'
-    if not mc.objExists('mat_' + pw_name):
-        mat_paper_white = mc.shadingNode('lambert', asShader=True, name='mat_' + pw_name)
-        mc.setAttr(mat_paper_white + '.color', 0.98, 0.98, 0.98, type='double3')
-        mc.setAttr(mat_paper_white + '.diffuse', 1)
+    if not cmds.objExists('mat_' + pw_name):
+        mat_paper_white = cmds.shadingNode('lambert', asShader=True, name='mat_' + pw_name)
+        cmds.setAttr(mat_paper_white + '.color', 0.98, 0.98, 0.98, type='double3')
+        cmds.setAttr(mat_paper_white + '.diffuse', 1)
     else:
         mat_paper_white = 'mat_' + pw_name
         
     # White Shader
-    if not mc.objExists('shd_' + pw_name):
-        shd_paper_white = mc.sets(renderable=True, noSurfaceShader=True, empty=True, name='shd_' + pw_name)
+    if not cmds.objExists('shd_' + pw_name):
+        shd_paper_white = cmds.sets(renderable=True, noSurfaceShader=True, empty=True, name='shd_' + pw_name)
         # Connect material to shader
-        mc.connectAttr(mat_paper_white + '.outColor', shd_paper_white + '.surfaceShader')
+        cmds.connectAttr(mat_paper_white + '.outColor', shd_paper_white + '.surfaceShader')
 
     # Black Material
     pbl_name = 'paper_BLACK'
-    if not mc.objExists('mat_' + pbl_name):
-        mat_paper_black = mc.shadingNode('lambert', asShader=True, name='mat_' + pbl_name)
-        mc.setAttr(mat_paper_black + '.color', 0.1, 0.1, 0.1, type='double3')
-        mc.setAttr(mat_paper_black + '.diffuse', 1)
+    if not cmds.objExists('mat_' + pbl_name):
+        mat_paper_black = cmds.shadingNode('lambert', asShader=True, name='mat_' + pbl_name)
+        cmds.setAttr(mat_paper_black + '.color', 0.1, 0.1, 0.1, type='double3')
+        cmds.setAttr(mat_paper_black + '.diffuse', 1)
     else:
         mat_paper_black = 'mat_' + pbl_name
         
     # Black Shader
-    if not mc.objExists('shd_' + pbl_name):
-        shd_paper_black = mc.sets(renderable=True, noSurfaceShader=True, empty=True, name='shd_' + pbl_name)
+    if not cmds.objExists('shd_' + pbl_name):
+        shd_paper_black = cmds.sets(renderable=True, noSurfaceShader=True, empty=True, name='shd_' + pbl_name)
         # Connect material to shader
-        mc.connectAttr(mat_paper_black + '.outColor', shd_paper_black + '.surfaceShader')
+        cmds.connectAttr(mat_paper_black + '.outColor', shd_paper_black + '.surfaceShader')
 
-createShaders()
-windowUI()

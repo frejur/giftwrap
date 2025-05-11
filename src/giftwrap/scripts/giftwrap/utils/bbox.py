@@ -1,4 +1,4 @@
-import maya.cmds as mc
+import maya.cmds as cmds
 import maya.api.OpenMaya as om
 from enum import IntEnum
 
@@ -14,7 +14,7 @@ class ObjectSpaceBoundingBox:
     """
     def __init__(self, obj=None):
         if obj is None:
-            obj = mc.ls(selection=True)
+            obj = cmds.ls(selection=True)
 
         if not obj:
             raise ValueError('No object specified / selected')
@@ -25,11 +25,11 @@ class ObjectSpaceBoundingBox:
         if isinstance(obj, list):
             obj = obj[0]
 
-        if not mc.objExists(obj):
+        if not cmds.objExists(obj):
             raise ValueError(f'Object {obj} does not exist')
 
         world_matrix = om.MMatrix(
-            mc.xform(obj, query=True, worldSpace=True, matrix=True)
+            cmds.xform(obj, query=True, worldSpace=True, matrix=True)
         )
 
         # Extract rotational values (exclude scale)
@@ -46,21 +46,21 @@ class ObjectSpaceBoundingBox:
 
         # Collect vertices from the object and all sub nodes
         all_objects = [obj]
-        sub_nodes = mc.listRelatives(
+        sub_nodes = cmds.listRelatives(
             obj, allDescendents=True, fullPath=True, type='transform'
         ) or []
         all_objects.extend(sub_nodes)
 
         for o in all_objects:
-            shapes = mc.listRelatives(o, shapes=True, fullPath=True) or []
+            shapes = cmds.listRelatives(o, shapes=True, fullPath=True) or []
             if not shapes:
                 continue
 
             for shape in shapes:
-                shape_type = mc.nodeType(shape)
+                shape_type = cmds.nodeType(shape)
 
                 if shape_type == 'mesh':
-                    verts = mc.xform(
+                    verts = cmds.xform(
                         f'{o}.vtx[*]',
                         query=True, translation=True, worldSpace=True
                     )
@@ -71,7 +71,7 @@ class ObjectSpaceBoundingBox:
 
                 elif shape_type in ['nurbsSurface', 'nurbsCurve']:
                     try:
-                        cvs = mc.xform(
+                        cvs = cmds.xform(
                             f'{o}.cv[*]',
                             query=True, translation=True, worldSpace=True
                         )
@@ -81,7 +81,7 @@ class ObjectSpaceBoundingBox:
                             )
                     except:
                         # Fallback to bounding box corners
-                        bb = mc.exactWorldBoundingBox(o)
+                        bb = cmds.exactWorldBoundingBox(o)
                         all_verts_world.extend([
                             om.MPoint(bb[0], bb[1], bb[2]),  # min corner
                             om.MPoint(bb[3], bb[1], bb[2]),  # +x, -y, -z
@@ -94,7 +94,7 @@ class ObjectSpaceBoundingBox:
                         ])
 
         # World translation
-        translate = mc.xform(obj, query=True, translation=True, worldSpace=True)
+        translate = cmds.xform(obj, query=True, translation=True, worldSpace=True)
         translate_vector = om.MVector(translate[0], translate[1], translate[2])
 
         # Transform all world space points to object space
@@ -240,7 +240,7 @@ def drawObjectSpaceBoundingBox(bbox, color=(0, 1, 1)):
     """
     corners = bbox.getCorners()
 
-    bbox_group = mc.group(empty=True, name='bbox_curves_grp')
+    bbox_group = cmds.group(empty=True, name='bbox_curves_grp')
 
     edges = [
         (0, 1), (1, 5), (5, 4), (4, 0), # Bottom
@@ -253,19 +253,19 @@ def drawObjectSpaceBoundingBox(bbox, color=(0, 1, 1)):
         start_point = corners[start_idx]
         end_point = corners[end_idx]
 
-        curve = mc.curve(
+        curve = cmds.curve(
             p=[start_point, end_point],
             degree=1,
             name=f'bbox_edge_{i}'
         )
 
-        shape = mc.listRelatives(curve, shapes=True)[0]
-        mc.setAttr(f'{shape}.overrideEnabled', 1)
-        mc.setAttr(f'{shape}.overrideRGBColors', 1)
-        mc.setAttr(f'{shape}.overrideColorRGB', color[0], color[1], color[2])
+        shape = cmds.listRelatives(curve, shapes=True)[0]
+        cmds.setAttr(f'{shape}.overrideEnabled', 1)
+        cmds.setAttr(f'{shape}.overrideRGBColors', 1)
+        cmds.setAttr(f'{shape}.overrideColorRGB', color[0], color[1], color[2])
 
         curves.append(curve)
 
-    mc.parent(curves, bbox_group)
+    cmds.parent(curves, bbox_group)
 
     return bbox_group
