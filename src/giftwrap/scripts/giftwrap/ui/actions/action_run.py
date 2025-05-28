@@ -1,30 +1,68 @@
 import maya.cmds as cmds
 from ... import GiftWrap
+from ...wrapper import *
+from ...globals.parameters import *
 
-""" Helpers to fetch control values """
-def _sliderValue(ctrl_name, **kwargs):
-    return cmds.floatSliderGrp(kwargs.get(ctrl_name), query=True, value=True )
-def _optionValue(ctrl_name, **kwargs):
-    return cmds.optionMenu(kwargs.get(ctrl_name), query=True, value=True )
-def _intValue(ctrl_name, **kwargs):
-    return cmds.intField(kwargs.get(ctrl_name), query=True, value=True )
+""" Helper to fetch control values """
+def _controlValue(ctrl_name, ctrl_type):
+    if (ctrl_type == None):
+        raise ValueError("Parameter attribute has no control type")
+    if (ctrl_type == Ctrl_Type.OPTION_MENU):
+        return cmds.optionMenu(ctrl_name, query=True, value=True)
+    if (ctrl_type == Ctrl_Type.CHECKBOX):
+        return cmds.checkBox(ctrl_name, query=True, value=True)
+    if (ctrl_type == Ctrl_Type.FLOAT_SLIDER):
+        return cmds.floatSlider(ctrl_name, query=True, value=True)
+    if (ctrl_type == Ctrl_Type.INT_FIELD):
+        return cmds.intField(ctrl_name, query=True, value=True)
 
 def runWrap(**kwargs):
     """
     Creates a Wrapper object for each selected node
     """
-    paper_thickness = _sliderValue('ctrl_paper_thickness', **kwargs)
-    paper_color     = _optionValue('ctrl_paper_color', **kwargs).lower()
-    ribbon_size     = _optionValue('ctrl_ribbon_width', **kwargs)[0]
-    ribbon_color    = _optionValue('ctrl_ribbon_color', **kwargs).lower()
-    animation_start =    _intValue('ctrl_anim_start', **kwargs)
-    animation_end   =    _intValue('ctrl_anim_end', **kwargs)
+
+    new_kwargs = {}
+    for (key_string, value) in kwargs.items():
+        try:
+            key_enum = Parm[key_string.upper()]
+        except KeyError:
+            continue
+
+        if key_enum in ATTR and P_Attr.CONTROL_TYPE in ATTR[key_enum]:
+            value = _controlValue(value, ATTR[key_enum][P_Attr.CONTROL_TYPE])
+
+        new_kwargs[key_string] = value
+
+    new_kwargs[Parm.RIBBON_WIDTH.name.lower()] = 'L' # TODO: Implement proper ribbon width
 
     objects = cmds.ls(selection=True)
 
-    for o in objects[:32]:
-        GiftWrap(
-            o, 'create',
-            ribbon_size, paper_thickness, paper_color,
-            ribbon_color, animation_start, animation_end
-        )
+    for o in objects:
+        GiftWrap(o, **new_kwargs)
+
+# DEBUG BEGIN ==================================================================
+
+def runWrapDebug(**kwargs):
+    """
+    Creates a Wrapper object for each selected node
+    """
+
+    new_kwargs = {}
+    for (key_string, value) in kwargs.items():
+        try:
+            key_enum = Parm[key_string.upper()]
+        except KeyError:
+            continue
+
+        if key_enum in ATTR and P_Attr.CONTROL_TYPE in ATTR[key_enum]:
+            value = _controlValue(value, ATTR[key_enum][P_Attr.CONTROL_TYPE])
+
+        new_kwargs[key_string] = value
+
+    objects = cmds.ls(selection=True)
+
+    for o in objects:
+        Wrapper( o, **new_kwargs )
+
+# DEBUG BREAK ==================================================================
+

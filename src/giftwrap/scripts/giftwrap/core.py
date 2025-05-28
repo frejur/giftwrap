@@ -8,11 +8,7 @@ import maya.mel as mel
 import string
 import random
 from enum import IntEnum
-
-obj_num_min = 3
-obj_num_max = 32
-obj_scale_min = 1.0
-obj_scale_max = 6.0
+from .globals.parameters import *
 
 wrap_list = []
 
@@ -120,17 +116,31 @@ class GiftWrap(object):
 
     """
     def __init__(
-            self, name,
-            mode='create', ribbon_size='L', thickness=0.02, wrap_color='random',
-            ribbon_color='random', anim_s=1, anim_e=24,
-            orientation=CoordinateSpace.OBJECT
+            self, object_name, **kwargs
     ):
         # Don't create object if node can't be found
 
-        if  not cmds.objExists(name):
-            raise ValueError('Node "%s" does not exist' % (name,))
+        if  not cmds.objExists(object_name):
+            raise ValueError('Node "%s" does not exist' % (object_name,))
 
-        self.wrap_name = name
+        self.mode = kwargs.get('mode', 'create')
+
+        parms = {
+            'wrap_thickness':  Parm.PAPER_THICKNESS,
+            'wrap_color':       Parm.PAPER_COLOR,
+            'ribbon_size':     Parm.RIBBON_WIDTH,
+            'ribbon_thickness': Parm.RIBBON_THICKNESS,
+            'ribbon_color':     Parm.RIBBON_COLOR,
+            'animation_start':  Parm.ANIM_START_FRAME,
+            'animation_end':    Parm.ANIM_END_FRAME,
+        }
+
+        for name, p_id in parms.items():
+            p_id_string = p_id.name.lower()
+            value = kwargs.get(p_id_string, None)
+            setattr(self, name, value)
+
+        self.wrap_name = object_name
         self.pivots = {}
 
         # Initialize members to None
@@ -138,7 +148,7 @@ class GiftWrap(object):
         self.wrap_paper = None
         self.ctrl_handle = None
 
-        self.coord_space = orientation
+        # self.coord_space = orientation
         self.up_axis = UpAxis.Y
 
         self.main_group_name = None
@@ -174,22 +184,15 @@ class GiftWrap(object):
         self.ini_r = None
         self.ini_pivot_offs = None
 
-        if mode == 'create':
+        if self.mode == 'create':
             self.wrap_id = self.idGenerator(size=5) # Unique ID used for naming
-            if thickness < 0.02 : thickness = 0.02
-            self.wrap_thickness = thickness # Paper density in maya units
-            self.ribbon_thickness = thickness
-            self.ribbon_size = ribbon_size
 
-            self.wrap_color = self.setColor(wrap_color, 1)
-            self.ribbon_color = self.setColor(ribbon_color, 2)
-
-            self.animation_start = anim_s
-            self.animation_end = anim_e
+            self.wrap_color = self.setColor(self.wrap_color, 1)
+            self.ribbon_color = self.setColor(self.ribbon_color, 2)
 
             self.wrap_overlap = False # Should folds overlap...
             self.createGiftWrap()
-        if mode == 'load':
+        if self.mode == 'load':
             self.loadGiftWrap()
 
     def createGiftWrap(self, obj=None):
@@ -1084,6 +1087,7 @@ class GiftWrap(object):
         
         self.pivots['3UR'], pivot_3UR_group = self.createPivotAndCluster(self.wrap_id,
             '3UR', self.pivots['3UR'], vertices_3UR, [-45])
+        print(f'pivot 3UR: {self.pivots["3UR"]}')
 
         # BR
         vertices_3BR = [self.getVertexFromPoint(self.f_plane[0], points, 'I5')]
@@ -1577,6 +1581,7 @@ class GiftWrap(object):
                          /
                         (D)ownside
         """
+        print(f'Side width: {side_w}')
 
         def cpV(vec):
             return [vec[0], vec[1], vec[2]]

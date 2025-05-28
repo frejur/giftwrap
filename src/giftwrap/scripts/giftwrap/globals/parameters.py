@@ -4,10 +4,15 @@ Parameter names and values.
 
 from enum import Enum, auto
 
+# ==============================================================================
+# Enums
+# ==============================================================================
+
 class Parm(Enum):
+    WRAPPER_MODE      = auto()
     WRAPPER_ID        = auto()
     OBJECT_NAME       = auto()
-    PAPER_WEIGHT      = auto()
+    PAPER_THICKNESS   = auto()
     PAPER_USE_PLANE   = auto()
     PAPER_COLOR       = auto()
     RIBBON_THICKNESS  = auto()
@@ -26,6 +31,8 @@ class Parm(Enum):
     KNOT_PLACEMENT    = auto()
 
 class P_Opt(Enum):
+    CREATE_WRAPPER          = auto()
+    EDIT_WRAPPER            = auto()
     USE_WORLD_SPACE         = auto()
     USE_OBJECT_SPACE        = auto()
     USE_X_UP                = auto()
@@ -36,6 +43,13 @@ class P_Opt(Enum):
     PLACE_AS_IS             = auto()
     TIE_KNOT_AT_TOP         = auto()
     TIE_KNOT_AT_BOTTOM      = auto()
+    COLOR_RANDOM            = auto()
+    COLOR_RED               = auto()
+    COLOR_GREEN             = auto()
+    COLOR_BLUE              = auto()
+    COLOR_YELLOW            = auto()
+    COLOR_BLACK             = auto()
+    COLOR_WHITE             = auto()
 
 class P_Attr(Enum):
     MIN_VALUE     = auto()
@@ -52,11 +66,28 @@ class P_Attr(Enum):
 class Ctrl_Type(Enum):
     CHECKBOX     = auto()
     INT_SLIDER   = auto()
+    INT_FIELD    = auto()
     FLOAT_SLIDER = auto()
     OPTION_MENU  = auto()
     TEXT_INPUT   = auto()
 
+# ==============================================================================
+# Notes
+# ==============================================================================
+
+LEGACY_COLORS_NOTE = ('NOTE: The colors are a legacy option.\n'
+                      'A set of very basic shaders with different colors\n'
+                      'are set up and assigned to the different meshes.\n'
+                      'This color information will NOT be exported.')
+
+# ==============================================================================
+# Parameter Attributes
+# ==============================================================================
+
 ATTR = {
+    Parm.WRAPPER_MODE: {
+        P_Attr.DEFAULT_VALUE: P_Opt.CREATE_WRAPPER,
+    },
     Parm.WRAPPER_ID: {
         P_Attr.DESCRIPTION:  'Wrapper ID',
         P_Attr.COLUMN_LABEL: 'ID'
@@ -65,9 +96,9 @@ ATTR = {
         P_Attr.DESCRIPTION:  'Name of original object',
         P_Attr.COLUMN_LABEL: 'Object',
     },
-    Parm.PAPER_WEIGHT: {
-        P_Attr.DESCRIPTION:   'Paper weight',
-        P_Attr.CONTROL_LABEL: 'Weight',
+    Parm.PAPER_THICKNESS: {
+        P_Attr.DESCRIPTION:   'Paper thickness',
+        P_Attr.CONTROL_LABEL: 'Thickness',
         P_Attr.COLUMN_LABEL:  'P. weight',
         P_Attr.MIN_VALUE:     0.005,
         P_Attr.MAX_VALUE:     0.05,
@@ -105,7 +136,7 @@ ATTR = {
         P_Attr.MIN_VALUE: -2048,
         P_Attr.MAX_VALUE: 2048,
         P_Attr.DEFAULT_VALUE: 1,
-        P_Attr.CONTROL_TYPE: Ctrl_Type.INT_SLIDER
+        P_Attr.CONTROL_TYPE: Ctrl_Type.INT_FIELD,
     },
     Parm.ANIM_END_FRAME: {
         P_Attr.DESCRIPTION: 'Animation end frame',
@@ -113,7 +144,7 @@ ATTR = {
         P_Attr.MIN_VALUE: -2048,
         P_Attr.MAX_VALUE: 2048,
         P_Attr.DEFAULT_VALUE: 100,
-        P_Attr.CONTROL_TYPE: Ctrl_Type.INT_SLIDER
+        P_Attr.CONTROL_TYPE: Ctrl_Type.INT_FIELD,
     },
     Parm.ANIMATE_PLACEMENT: {
         P_Attr.DESCRIPTION:   'If the object is reoriented and placed with\n'
@@ -188,8 +219,40 @@ ATTR = {
         P_Attr.DEFAULT_VALUE: 1,  # NOTE: 1-indexed
         P_Attr.CONTROL_TYPE: Ctrl_Type.OPTION_MENU,
         P_Attr.OPTIONS: (P_Opt.TIE_KNOT_AT_TOP, P_Opt.TIE_KNOT_AT_BOTTOM)
-    }
+    },
+    Parm.PAPER_COLOR: {
+        P_Attr.DESCRIPTION: 'The color of the paper mesh.\n' +
+                            LEGACY_COLORS_NOTE,
+        P_Attr.CONTROL_LABEL: 'Paper Color',
+        P_Attr.COLUMN_LABEL: 'P. Color',
+        P_Attr.DEFAULT_VALUE: 1,  # NOTE: 1-indexed
+        P_Attr.CONTROL_TYPE: Ctrl_Type.OPTION_MENU,
+        P_Attr.OPTIONS: (P_Opt.COLOR_RANDOM,
+                         P_Opt.COLOR_RED,
+                         P_Opt.COLOR_GREEN,
+                         P_Opt.COLOR_BLUE,
+                         P_Opt.COLOR_YELLOW,
+                         P_Opt.COLOR_BLACK,
+                         P_Opt.COLOR_WHITE)
+    },
+    Parm.RIBBON_COLOR: {
+        P_Attr.DESCRIPTION: 'The color of the ribbon surface.\n' +
+                            LEGACY_COLORS_NOTE,
+        P_Attr.CONTROL_LABEL: 'Ribbon Color',
+        P_Attr.COLUMN_LABEL: 'R. Color',
+        P_Attr.DEFAULT_VALUE: 1,  # NOTE: 1-indexed
+        P_Attr.CONTROL_TYPE: Ctrl_Type.OPTION_MENU,
+        P_Attr.OPTIONS: (P_Opt.COLOR_RANDOM,
+                         P_Opt.COLOR_RED,
+                         P_Opt.COLOR_GREEN,
+                         P_Opt.COLOR_BLUE,
+                         P_Opt.COLOR_YELLOW)
+    },
 }
+
+# ==============================================================================
+# Option menu options
+# ==============================================================================
 
 OPT = {
     P_Opt.USE_WORLD_SPACE         : 'World',
@@ -202,4 +265,11 @@ OPT = {
     P_Opt.PLACE_AS_IS             : 'As is',
     P_Opt.TIE_KNOT_AT_TOP         : 'Top',
     P_Opt.TIE_KNOT_AT_BOTTOM      : 'Bottom',
+    P_Opt.COLOR_RANDOM            : 'Random',
+    P_Opt.COLOR_RED               : 'Red',
+    P_Opt.COLOR_GREEN             : 'Green',
+    P_Opt.COLOR_BLUE              : 'Blue',
+    P_Opt.COLOR_YELLOW            : 'Yellow',
+    P_Opt.COLOR_BLACK             : 'Black',
+    P_Opt.COLOR_WHITE             : 'White',
 }
