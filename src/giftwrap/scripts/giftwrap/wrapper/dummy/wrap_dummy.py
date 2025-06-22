@@ -38,7 +38,7 @@ class WrapDummy():
         )
         self.curves = cmds.rename(
             self.curves,
-            f'{_DUMMY_PREFIX}_{bb_space.name.lower()}_{wrapper_id}_GRP'
+            f'{_DUMMY_PREFIX}_{bb_space.name.lower()}_{wrapper_id}_grp'
         )
 
     def toggleVisibility(self, show=None):

@@ -1,4 +1,4 @@
-from ...utils.types.vec import Vec
+from ...utils.custom_types.vec import Vec
 
 def getRibbonPoints(obj_width, obj_height, obj_depth, paper_thickness,
                     ribbon_thickness, ribbon_width):
@@ -25,13 +25,13 @@ def getRibbonPoints(obj_width, obj_height, obj_depth, paper_thickness,
         return Vec(xyz.x, xyz.y, xyz.z)
 
     wrapped_width = obj_width + 2 * ribbon_thickness
-    y_pos = obj_height + (ribbon_thickness / 3)
-    x_pos = (obj_width / 2) + (ribbon_thickness + paper_thickness)
-    z_pos = (obj_depth / 2) + (ribbon_thickness / 3)
+    y_pos = obj_height + paper_thickness * 2 + (ribbon_thickness / 3)
+    x_pos = (obj_width / 2) + (ribbon_thickness / 2 + paper_thickness)
+    z_pos = (obj_depth / 2) + (ribbon_thickness / 2 + paper_thickness)
     edg_m = paper_thickness / 2  # edge margin
     mid_c = 0.5  # mid point coefficient
     end_m = 2 * paper_thickness  # end point margin
-    x_pos_m = paper_thickness  # width (L and R) margin
+    x_pos_m = paper_thickness * 3 # width (L and R) margin
     x_edge = (wrapped_width / 2)  # + thickness + (r_thickness / 2)
     half_h = obj_height * 0.5
     y_3rd = y_pos / 3
@@ -98,7 +98,7 @@ def getRibbonPoints(obj_width, obj_height, obj_depth, paper_thickness,
     pts['LD'] = Vec(-(x_edge + x_pos_m), pts['D'].y + edg_m, pts['L'].z)
     pts.update({
         'LDmid': Vec(pts['L'].x, pts['L'].y - y_3rd, pts['L'].z),
-        'LDend': Vec(pts['LU'].x - x_pos_m, pts['LU'].y - end_m, pts['LU'].z)})
+        'LDend': Vec(pts['LU'].x - x_pos_m, pts['LD'].y + end_m, pts['LU'].z)})
 
     pts['LB'] = Vec(pts['L'].x, pts['L'].y, pts['B'].z + edg_m)
     pts.update({
@@ -119,7 +119,7 @@ def getRibbonPoints(obj_width, obj_height, obj_depth, paper_thickness,
     pts['RD'] = Vec(x_edge + x_pos_m, pts['D'].y + edg_m, pts['R'].z)
     pts.update({
         'RDmid': Vec(pts['R'].x, pts['R'].y - y_3rd, pts['R'].z),
-        'RDend': Vec(pts['RU'].x + x_pos_m, pts['RU'].y + end_m, pts['RU'].z)})
+        'RDend': Vec(pts['RU'].x + x_pos_m, pts['RD'].y + end_m, pts['RU'].z)})
 
     pts['RB'] = Vec(pts['R'].x, pts['R'].y, pts['B'].z + edg_m)
     pts.update({
@@ -135,7 +135,7 @@ def getRibbonPoints(obj_width, obj_height, obj_depth, paper_thickness,
     pts['BU'] = Vec(pts['B'].x, pts['U'].y - edg_m, pts['B'].z)
     pts.update({
         'BUmid': Vec(pts['B'].x, pts['B'].y + qrt_y , pts['B'].z),
-        'BUend': Vec(pts['BU'].x + x_pos_m, pts['BU'].y - end_m, pts['BU'].z)})
+        'BUend': Vec(pts['BU'].x, pts['BU'].y - end_m, pts['BU'].z)})
 
     pts['BD'] = Vec(pts['B'].x, pts['D'].y + edg_m, pts['B'].z)
     pts.update({

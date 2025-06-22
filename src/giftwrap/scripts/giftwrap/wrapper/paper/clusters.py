@@ -2,7 +2,7 @@ from copy import deepcopy
 
 import maya.cmds as cmds
 from .pivots import calculateFoldingPivots
-from ...utils.types.vec import Vec
+from ...utils.custom_types.vec import Vec
 
 class Clusters:
     def __init__(self, folding_pattern, folding_plane, paper_mesh, wrap_id):
@@ -137,7 +137,7 @@ class Clusters:
 
         # Grouping =============================================================
 
-        self.main_group = cmds.group(n=f'cluster_{self.wrap_id}_GRP', em=True)
+        self.main_group = cmds.group(n=f'clusters_{self.wrap_id}_grp', em=True)
         # Set inheritsTransform to make clusters stay in place
         cmds.setAttr(f'{self.main_group}.inheritsTransform', 0)
 
@@ -243,8 +243,10 @@ class Clusters:
             Stores the new cluster handle in `self.handles`
         """
         _, new_handle = cmds.cluster(
-            vertices, name=f'gift_{self.wrap_id}_cluster_{cluster_id}'
+            vertices, name=f'cluster_{cluster_id}_{self.wrap_id}'
         )
+        new_handle = cmds.rename(new_handle,
+                                 f'cluster_{cluster_id}_handle_{self.wrap_id}')
         cmds.xform(new_handle, rotatePivot=list(self.pivot_xyz[cluster_id]))
 
         if cluster_id in self.handles:
@@ -272,14 +274,14 @@ class Clusters:
             (rotation_xyz is not None and rotation_y is not None)):
             raise ValueError('Must specify either rotation_xyz or rotation_y')
 
-        base_name = f'gift_{self.wrap_id}_cluster_{cluster_id}'
+        base_name = f'cluster_{cluster_id}'
 
         # Create locator
         pivot = cmds.spaceLocator(position=list(self.pivot_xyz[cluster_id]),
-                                  name=f'{base_name}_pivot')[0]
+                                  name=f'{base_name}_pivot_{self.wrap_id}')[0]
 
         # Create group
-        pivot_group = cmds.group(pivot, name=f'GRP_{base_name}')
+        pivot_group = cmds.group(pivot, name=f'{base_name}_{self.wrap_id}_grp')
 
         # Set rotation
         if rotation_y is not None:
@@ -291,7 +293,10 @@ class Clusters:
         cmds.xform(pivot, centerPivots=True)
 
         # Create cluster
-        _, new_handle = cmds.cluster(vertices, name=base_name)
+        _, new_handle = cmds.cluster(vertices,
+                                     name=f'{base_name}_{self.wrap_id}')
+        new_handle = cmds.rename(new_handle,
+                                 f'{base_name}_handle_{self.wrap_id}')
         cmds.parent(new_handle, pivot)
 
         if (cluster_id in self.pivot_locators

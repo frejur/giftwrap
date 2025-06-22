@@ -1,5 +1,5 @@
 from collections import namedtuple
-from ...utils.types.vec import Vec
+from ...utils.custom_types.vec import Vec
 
 class FoldingPattern:
     def __init__(self, side_a, side_d, side_e, paper_thickness):
@@ -23,6 +23,9 @@ class FoldingPattern:
         gft_side_b = side_d * 0.6
         gft_side_c = side_e / 2 + y_gft
         side_e += paper_thickness  # needs to be run last
+
+        # Store length of flaps
+        self.flap_length = gft_side_b
 
         # check if folds will overlap
         self.folds_overlap = side_e < (2 * gft_side_b)
@@ -83,6 +86,8 @@ class FoldingPattern:
             'I7': Vec(x_i, y_gft, z_7),
             'I8': Vec(x_i, y_gft, z_8), 'I4a':Vec(x_i, y_gft, z_3)
         }
+
+        # Diagonal folds -------------------------------------------------------
 
         # Calculate diagonal folds F4a, F4b, I4a, I4b
         self.gift_fold_points['I4a'].z += gft_side_b
@@ -148,11 +153,55 @@ class FoldingPattern:
             self.gift_fold_points['F7b'] = Vec(x_f, y_gft, z_7)
             self.gift_fold_points['F7b'].z -= gft_side_b - gft_side_c
 
+        # Padding folds --------------------------------------------------------
+        thk = paper_thickness # shorthand
+
+        # Calculate padding folds F4u, F4d, F4us, F4ds
+        self.gift_fold_points['F4u'] = Vec(x_g - thk, y_gft, z_3 + thk)
+        self.gift_fold_points['F4d'] = Vec(x_g - thk, y_gft, z_5 - thk)
+        self.gift_fold_points['F4us'] = Vec(x_f, y_gft, z_3 + thk)
+        self.gift_fold_points['F4ds'] = Vec(x_f, y_gft, z_5 - thk)
+
+        # Calculate padding folds I4u, I4d, I4us, I4ds
+        self.gift_fold_points['I4u'] = Vec(x_h + thk, y_gft, z_3 + thk)
+        self.gift_fold_points['I4d'] = Vec(x_h + thk, y_gft, z_5 - thk)
+        self.gift_fold_points['I4us'] = Vec(x_i, y_gft, z_3 + thk)
+        self.gift_fold_points['I4ds'] = Vec(x_i, y_gft, z_5 - thk)
+
+        # Calculate padding folds F1u, F1d, F1s, I1u, I1d, I1u
+        self.gift_fold_points['F1u'] = Vec(x_g - thk, y_gft, z_1)
+        self.gift_fold_points['F1d'] = Vec(x_g - thk, y_gft, z_2 - thk)
+        self.gift_fold_points['F1s'] = Vec(x_f, y_gft, z_2 - thk)
+        self.gift_fold_points['I1u'] = Vec(x_h + thk, y_gft, z_1)
+        self.gift_fold_points['I1d'] = Vec(x_h + thk, y_gft, z_2 - thk)
+        self.gift_fold_points['I1s'] = Vec(x_i, y_gft, z_2 - thk)
+
+        # Calculate padding folds F7u, F7s, F7d, F7m, F8d
+        self.gift_fold_points['F7u'] = Vec(x_g - thk, y_gft, z_6 + thk)
+        self.gift_fold_points['F7s'] = Vec(x_f, y_gft, z_6 + thk)
+        if not self.folds_overlap:
+            self.gift_fold_points['F7d'] = Vec(x_g - thk, y_gft, z_7)
+        else:
+            self.gift_fold_points['F7m'] = Vec(x_g - thk, y_gft, z_7)
+            self.gift_fold_points['F8d'] = Vec(x_g - thk, y_gft, z_8)
+
+        # Calculate padding folds I7u, I7s, I7d, I7m, I8d
+        self.gift_fold_points['I7u'] = Vec(x_h + thk, y_gft, z_6 + thk)
+        self.gift_fold_points['I7s'] = Vec(x_i, y_gft, z_6 + thk)
+        if not self.folds_overlap:
+            self.gift_fold_points['I7d'] = Vec(x_h + thk, y_gft, z_7)
+        else:
+            self.gift_fold_points['I7m'] = Vec(x_h + thk, y_gft, z_7)
+            self.gift_fold_points['I8d'] = Vec(x_h + thk, y_gft, z_8)
+
     def point(self, point_id):
         return self.gift_fold_points[point_id]
 
     def hasOverlappingFolds(self):
         return self.folds_overlap
+
+    def getFlapLength(self):
+        return self.flap_length
 
 """
  FOLDING PATTERN DIAGRAM
@@ -183,7 +232,7 @@ class FoldingPattern:
            |    ¤|               |¤    |
      (a+b),|  ¤  |       :       |  ¤  |
         7_ |%_ _ |_ _ _ _ _ _ _ _|_ _ %|  _____
-        8_ |_____|_______________|_____|  _____ F
+        8_ |_____|_______________|_____|  _____ F (Only present when no overlap)
                          :
                                  <= B =>
                          :
@@ -237,4 +286,54 @@ BL quadrant <--          :             --> BR quadrant
   -----------------      :
              |           :
              a           :
+
+                    Padding folds
+      (The 'flaps' are extended / padded by the
+       paper thickness before they are folded,
+       in order to avoid self-intersections)
+ 
+    Overlapping folds    :              No overlap
+                         :
+  Upper                  :    Upper                   Lower
+     u                   :       u
+  . -|- - - - - - .  1   :    . -|- - - - - - .   1   .- - - - - - - -.    
+  :  |   .       .:      :    :  |            :       :.              :
+  :  |     .   .  :      :    :  |            :       :  u_____________ s
+  :  |       .    :      :    :  |           .:       :  | .          :
+  :  |     .   .  :      :    :  |         .  :       :  |   .        :
+  :  |   .       .:      :    :  |       .    :       :  |     .      :
+  :  | .          :      :    :  |     .      :       :  |       .    :
+  :  d_____________ s    :    :  |   .        :       :  |         .  :
+  :.              :      :    :  | .          :       :  |           .:
+  ' - - - - - - - '      :    :  d_____________ s     :  |            :
+                         :    :.              :       :  |            :
+                         :    ' - - - - - - - -       :- m - - - - - -:   7
+                         :                            :  |            :
+                         :    Mid                     :  |            :
+  Mid                    :    .- - - - - - - -.       ' -|- - - - - - '   8
+  .- - - - - - - -.      :    :.              :          d
+  :.              :      :    :  u_____________ us
+  :  u_____________ us   :    :  | .          :
+  :  | .          :      :    :  |   .        :
+  :  |   .       .:      :    :  |     .      :
+  :  |     .   .  :      :    :  |       .    :
+  :  |       .    :  4   :    :  |         .  :
+  :  |     .   .  :      :    :  |           .:
+  :  |   .       .:      :    :  |            :
+  :  | .          :      :    :  |            :   4
+  :  d_____________ ds   :    :  |            :
+  :.              :      :    :  |           .:
+  ' - - - - - - - '      :    :  |         .  :
+                         :    :  |       .    :
+  Lower                  :    :  |     .      :
+  .- - - - - - - -.      :    :  |   .        :
+  :.              :      :    :  | .          :
+  :  u_____________ s    :    :  d_____________ ds
+  :  | .          :      :    :.              :
+  :  |   .       .:      :    '- - - - - - - -'
+  :  |     .   .  :      :
+  :  |       .    :      :
+  '- | - - - - - -'  7   :
+     d                   :
+                         :
 """

@@ -3,8 +3,15 @@
 Gift Wrap Script, Fredrik Juréen 2025
 """
 
-import maya.cmds as cmds
-import maya.mel as mel
+try:
+    import maya.cmds as cmds
+except ImportError:
+    class MockCmds:
+        def __getattr__(self, name):
+            def mock(*args, **kwargs):
+                pass  # Do nothing
+            return mock
+    cmds = MockCmds()
 import string
 import random
 from enum import IntEnum

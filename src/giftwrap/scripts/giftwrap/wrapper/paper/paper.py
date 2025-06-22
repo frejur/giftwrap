@@ -7,7 +7,8 @@ from .clusters import Clusters
 from ...globals.constants import *
 
 class Paper:
-    def __init__(self, obj_width, obj_height, obj_depth, p_thickness, wrap_id):
+    def __init__(self, obj_width, obj_height, obj_depth,
+                 p_thickness, flip_y, wrap_id):
         """
         A collection of paper objects used to wrap any object with the specified
         dimensions.
@@ -17,13 +18,23 @@ class Paper:
             obj_height:  The height of the object in maya units
             obj_depth:   The depth of the object in maya units
             p_thickness: The thickness of the paper mesh in maya units
+            flip_y:      If True, the order in which the upper and lower folds
+                         are folded is flipped.
             wrap_id:     The unique identifier for the Wrapper object.
         """
         self.object_width = obj_width
         self.object_height = obj_height
         self.object_depth = obj_depth
         self.thickness = p_thickness
+        self.lower_flap_first = not flip_y
         self.wrap_id = wrap_id
+
+        # Flaps
+        a_val, b_val = (5, 6) if self.lower_flap_first else (6, 5)
+        self.flaps = {
+            'A': {'left': f'{a_val}L', 'right': f'{a_val}R'},
+            'B': {'left': f'{b_val}L', 'right': f'{b_val}R'}
+        }
 
         self.fold_number = self._validFoldNumber(0)
 
@@ -44,33 +55,22 @@ class Paper:
         cmds.select(self.mesh.getTransformNode(),
                     self.folding_plane.getTransformNode())
         cmds.CreateWrap()
+        wrap_base = f'{self.folding_plane.getTransformNode()}Base'
+        wrap_base = cmds.rename(wrap_base,
+                                f'deformer_base_{self.wrap_id}_geo')
 
         self.clusters = Clusters(self.pattern, self.folding_plane,
                                  self.mesh, self.wrap_id)
 
         # Group
-        self.paper_group = cmds.group(name=f'GRP_gift_{wrap_id}_paper',
+        self.paper_group = cmds.group(name=f'paper_{wrap_id}_grp',
                                       empty=True)
+        cmds.parent(wrap_base, self.paper_group)
+        cmds.hide(self.folding_plane.getTransformNode())
         cmds.parent(self.folding_plane.getTransformNode(), self.paper_group)
         cmds.parent(self.mesh.getTransformNode(), self.paper_group)
+        cmds.hide(self.clusters.getMainGroup())
         cmds.parent(self.clusters.getMainGroup(), self.paper_group)
-
-        # for i in range(17):
-        #     self.setFoldNumber(i)
-        #     dup_plane = cmds.duplicate(self.folding_plane.getTransformNode())
-        #     dup_mesh = cmds.duplicate(self.mesh.getTransformNode())
-        #     for j in range(2):
-        #         cmds.xform([dup_plane, dup_mesh][j - 1],
-        #                    translation=[
-        #                        i * (self.object_width + self.object_height * 2)
-        #                        * 1.1,
-        #                        0,
-        #                        (self.object_height + self.object_depth)
-        #                        * j * 1.2],
-        #                    worldSpace=True)
-        #
-        # self.setFoldNumber(0)
-
 
     # Setters ==================================================================
 
@@ -113,13 +113,13 @@ class Paper:
         if fold_number >= 12:
             self._setClusterRotate('4BR', x=178)
         if fold_number >= 13:
-            self._setClusterRotate('5L', z=86)
+            self._setClusterRotate(self.flaps['left']['A'], z=86)
         if fold_number >= 14:
-            self._setClusterRotate('5R', z=-86)
+            self._setClusterRotate(self.flaps['right']['A'], z=-86)
         if fold_number >= 15:
-            self._setClusterRotate('6L', z=-84)
+            self._setClusterRotate(self.flaps['left']['B'], z=-84)
         if fold_number >= 16:
-            self._setClusterRotate('6R', z=84)
+            self._setClusterRotate(self.flaps['right']['B'], z=84)
         if fold_number == 0:
             self._setClusterRotate('1B', x=0, y=0, z=0)
         if fold_number < 2:

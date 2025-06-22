@@ -12,8 +12,7 @@ class PaperMesh:
         self.wrap_id = wrap_id
 
         self.mesh = cmds.duplicate(self.plane,
-                                   name=f'wrap_paper_{self.wrap_id}')
-        print(f'paper mesh dup: {self.mesh}')
+                                   name=f'paper_{self.wrap_id}_geo')
         self.mesh = self.mesh[0]
 
         # Make high-poly

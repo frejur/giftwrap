@@ -7,4 +7,5 @@ areas of the script together.
 OBJ_NUM_MAX = 100
 FOLD_MIN = 0
 FOLD_MAX = 17
+LOWER_FLAP_ANGLE = 86
 

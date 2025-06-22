@@ -30,7 +30,7 @@ class Control_handle:
         CTRL_WIDTH = self.x_max - self.x_min
         CTRL_DEPTH = self.z_max - self.z_min
         PAD = CTRL_WIDTH * 0.1 if CTRL_WIDTH > CTRL_DEPTH else CTRL_DEPTH * 0.1
-        outline, _ = cmds.circle(n=f'CTRL_wrapper_{self.wrap_id}',
+        outline, _ = cmds.circle(n=f'wrapper_{self.wrap_id}_ctrl',
                                  sections=8, degree=1)
         cv_positions = [
             (self.x_max + PAD, 0, self.z_min),

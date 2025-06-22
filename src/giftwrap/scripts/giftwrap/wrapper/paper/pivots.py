@@ -1,4 +1,4 @@
-from ...utils.types.vec import Vec
+from ...utils.custom_types.vec import Vec
 
 def calculateFoldingPivots(folding_pattern):
     """

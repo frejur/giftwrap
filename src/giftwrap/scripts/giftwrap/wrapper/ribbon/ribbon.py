@@ -53,18 +53,52 @@ class Ribbon:
         cmds.xform(self.profiles['1D'], centerPivots=True)
         xyz_U = self.points['U']
         cmds.move(xyz_U.x, xyz_U.y, xyz_U.z, self.profiles['1D'])
+        cmds.makeIdentity(self.profiles['1D'], apply=True)
         for prof_id in ['1U', '2R', '2L', '3L', '3R', '4']:
             self.profiles[prof_id] = self._createProfileCrvInstance(prof_id)
 
         # Slightly offset rotation of Bow profile and paths
         BOW_ROT = 5
-        cmds.rotate(0, -BOW_ROT, 0, self.paths['3L'], relative=True)
-        cmds.rotate(0, -BOW_ROT, 0, self.profiles['3L'], relative=True)
-        cmds.rotate(0, BOW_ROT, 0, self.paths['3R'], relative=True)
-        cmds.rotate(0, BOW_ROT, 0, self.profiles['3R'], relative=True)
+        for curve_id in ['3L', '3R']:
+            SIGN = 1 if curve_id == '3R' else -1
+            for curve in [self.paths[curve_id], self.profiles[curve_id]]:
+                cmds.rotate(0, SIGN * BOW_ROT, 0, curve, relative=True)
+                cmds.rotate(0, SIGN * BOW_ROT, 0, curve, relative=True)
 
-        for ribbon_id in ['1D', '1U', '2R', '2L', '3L', '3R', '4']:
-            self._createExtrusion(ribbon_id)
+        # Create surfaces
+        self.surfaces = {}
+        for surface_id in ['1D', '1U', '2R', '2L', '3L', '3R', '4']:
+            self.surfaces[surface_id] = self._createExtrusion(surface_id)
+
+        # Groups ===============================================================
+        self.ribbon_group = cmds.group(name=f'ribbon_{wrap_id}_grp',
+                                      empty=True)
+        # Extrusion Paths
+        path_group = cmds.group(name=f'ribbon_paths_{wrap_id}_grp',
+                                empty=True)
+        cmds.parent(path_group, self.ribbon_group)
+        for path in self.paths.values():
+            cmds.parent(path, path_group)
+        cmds.hide(path_group)
+
+        # Extrusion Profiles
+        profile_group = cmds.group(name=f'ribbon_profiles_{wrap_id}_grp',
+                                   empty=True)
+        cmds.parent(profile_group, self.ribbon_group)
+        for profile in self.profiles.values():
+            cmds.parent(profile, profile_group)
+        cmds.hide(profile_group)
+
+        # Extruded Surfaces
+        # Note that 'Inherits Transform' is disabled for this group.
+        # (The extrusion is based on the world-space positions of the Path and
+        # Profile curves, so enabling it would cause double-transformation.)
+        surface_group = cmds.group(name=f'ribbon_surfaces_{wrap_id}_grp',
+                                   empty=True)
+        cmds.parent(surface_group, self.ribbon_group)
+        for surface in self.surfaces.values():
+            cmds.setAttr(f'{surface_group}.inheritsTransform', False)
+            cmds.parent(surface, surface_group)
 
     # ==========================================================================
     # Getters
@@ -91,7 +125,7 @@ class Ribbon:
         if self.profile_type == RibbonType.ROUND:
             # Circle
             transform_node, _ = (
-                cmds.circle(n=f'{_PROF_SUFFIX_1D}_{self.wrap_id}')
+                cmds.circle(n=f'{_PROF_SUFFIX_1D}{self.wrap_id}')
             )
             cmds.move(self.ribbon_width / 2, self.ribbon_thickness / 2, 0,
                       f'{transform_node}.cv[0]')
@@ -112,7 +146,7 @@ class Ribbon:
         else:
             # Square
             transform_node, _ = (
-                cmds.circle(n=f'{_PROF_SUFFIX_1D}_{self.wrap_id}',
+                cmds.circle(n=f'{_PROF_SUFFIX_1D}{self.wrap_id}',
                             sections=4, degree=1,
                             radius=self.ribbon_width / 2)
             )
@@ -134,6 +168,9 @@ class Ribbon:
             The path to the shape node of the created NURBS curve.
         """
 
+        #DEBUG
+        id_list = []
+
         if ribbon_id in _SIDE_MAPPINGS_1_2:
             s_0, s_1, s_2 = _SIDE_MAPPINGS_1_2[ribbon_id]
             s_0_1, s_1_0, s_1_2, s_2_1 = (
@@ -146,20 +183,35 @@ class Ribbon:
                 f'{s_2_1}end', f'{s_2_1}mid', s_2]
 
             crv_list = [tuple(self.points[key]) for key in point_keys]
+
+            #DEBUG
+            for key in point_keys:
+                id_list.append(key)
+
         elif ribbon_id in ['3L', '3R']:
             crv_list = []
             prefix = 'bow_L' if ribbon_id[1] == 'L' else 'bow_R'
             num_pts = 7      if ribbon_id[1] == 'L' else 6
             for i in range(1, num_pts + 1):
                 crv_list.append(tuple(self.points[f'{prefix}{i}']))
+
+                # DEBUG
+                id_list.append(f'{prefix}{i}')
+
         elif ribbon_id == '4':
             crv_list = []
             prefix = 'knot_'
             num_pts = 5
             for i in range(1, num_pts + 1):
                 crv_list.append(tuple(self.points[f'{prefix}{i}']))
+                # DEBUG
+                id_list.append(f'{prefix}{i}')
         else:
             raise ValueError('Invalid ribbon ID')
+
+        # DEBUG
+        for (x, y, z), crv_id in zip(crv_list, id_list):
+            cmds.circle(c=[x, y, z], r=0.05, name=f'pt_{crv_id}')
 
         return cmds.curve(p=crv_list,
                           n =f'ribbon_{ribbon_id}_path_{self.wrap_id}')
@@ -210,6 +262,7 @@ class Ribbon:
         Returns:
             The path to the extruded surface
         """
-        return cmds.extrude(self.profiles[ribbon_id], self.paths[ribbon_id],
-                            n=f'ribbon_ext_{ribbon_id}_{self.wrap_id}',
-                            extrudeType=_FLAT, range=True)
+        ext, _ = cmds.extrude(self.profiles[ribbon_id], self.paths[ribbon_id],
+                              n=f'ribbon_{ribbon_id}_surface_{self.wrap_id}',
+                              extrudeType=_FLAT, range=True)
+        return ext

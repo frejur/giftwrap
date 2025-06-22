@@ -90,13 +90,18 @@ class Wrapper():
         self.original_object = object_name
         self.object = (
             cmds.duplicate(object_name,
-                           name=f'wrapper_{self.wrap_id}_copy')[0]
+                           name=f'object_copy_{self.wrap_id}_geo')[0]
             if self.keep_original
             else object_name)
 
         # Dummy
         self.dummy_world = WrapDummy(self.object, self.wrap_id, BboxSpace.WORLD)
         self.dummy_object = WrapDummy(self.object, self.wrap_id, BboxSpace.OBJECT)
+        self.dummy_group = cmds.group(n=f'dummy_{self.wrap_id}_grp',
+                                      empty=True)
+        cmds.parent([self.dummy_world.objectName(),
+                     self.dummy_object.objectName()],
+                    self.dummy_group)
 
         # Coordinate space and bounding box
         if self.cspace == OPT[P_Opt.USE_WORLD_SPACE]:
@@ -157,27 +162,34 @@ class Wrapper():
 
         self.paper = Paper(self.width, self.height, self.depth,
                            self.paper_thickness, self.wrap_id)
+        self.paper.setFoldNumber(16)
 
         uw_xyz_f_l = self.paper.getUnwrappedFrontLeftCorner()
         uw_xyz_b_r = self.paper.getUnwrappedBackRightCorner()
         self.control_handle = Control_handle(uw_xyz_f_l.x, uw_xyz_b_r.z,
                                              uw_xyz_b_r.x, uw_xyz_f_l.z,
                                              self.wrap_id)
-        # self.anchor         = ObjectAnchor(self.object, self.bounding_box)
         self.ribbon = Ribbon(self.width, self.height, self.depth,
                              self.paper_thickness,
                              self.ribbon_thickness, self.ribbon_width,
                              self.wrap_id)
-        self.shaders = None
+        self.anchor = ObjectAnchor(self.object, self.bounding_box)
+
+        # self.shaders = None
+
 
         # Debug offset
-        cmds.xform(self.paper.getGroup(),
-                   translation=list(self.bounding_box.getCentroid()),
-                   worldSpace=True)
+        # cmds.xform(self.paper.getGroup(),
+        #            translation=list(self.bounding_box.getCentroid()),
+        #            worldSpace=True)
 
     @staticmethod
     def idGenerator(size=4, chars=string.ascii_uppercase + string.digits):
         return ''.join(random.choice(chars) for _ in range(size))
+
+# ==============================================================================
+# Helpers
+# ==============================================================================
 
 def _default_value(parameter):
     """Fetch the default value for the given parameter"""

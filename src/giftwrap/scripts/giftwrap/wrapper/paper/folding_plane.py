@@ -2,6 +2,8 @@ import maya.cmds as cmds
 from enum import Enum, auto
 
 from .folding_pattern import *
+from .map.map_box import _BOX_MAPPINGS
+from .map.map_box_overlap import _BOX_OVERLAP_MAPPINGS
 
 class FoldingPlane:
     def __init__(self, pattern, wrap_id):
@@ -10,7 +12,7 @@ class FoldingPlane:
         and that folds / serves as a wrap deformer for the paper mesh.
         """
         self.wrap_id = wrap_id
-        plane_name = f'folding_plane_{self.wrap_id}'
+        plane_name = f'folding_plane_{self.wrap_id}_geo'
 
         self.pattern = pattern
         num_rows = 5 if self.pattern.hasOverlappingFolds() else 6
