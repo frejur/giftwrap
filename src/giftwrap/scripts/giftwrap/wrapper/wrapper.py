@@ -160,8 +160,10 @@ class Wrapper():
             self.depth = temp
             cmds.xform(debug_bb, rotation=[0, 90, 0], relative=True)
 
+        self.invert_flap_order = False
         self.paper = Paper(self.width, self.height, self.depth,
-                           self.paper_thickness, self.wrap_id)
+                           self.paper_thickness, self.invert_flap_order,
+                           self.wrap_id)
         self.paper.setFoldNumber(16)
 
         uw_xyz_f_l = self.paper.getUnwrappedFrontLeftCorner()

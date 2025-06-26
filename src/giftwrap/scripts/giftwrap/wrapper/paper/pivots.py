@@ -59,6 +59,10 @@ def calculateFoldingPivots(folding_pattern):
     temp_5R.y = temp_2U.y
     temp_5L = cpPos(folding_pattern.point('G4'))
     temp_5L.y = temp_2U.y
+    temp_6R = cpPos(folding_pattern.point('H4'))
+    temp_6R.x = folding_pattern.point('I4u').x
+    temp_6L = cpPos(folding_pattern.point('G4'))
+    temp_6L.x = folding_pattern.point('F4u').x
     wrap_pivots = {'1U': temp_1U,
                    '1B': avgPos(folding_pattern.point('I5'),
                                 folding_pattern.point('F5')),
@@ -68,7 +72,6 @@ def calculateFoldingPivots(folding_pattern):
                    '4UR': temp_4UR, '4BR': temp_4BR, '4UL': temp_4UL,
                    '4BL': temp_4BL,
                    '5R': temp_5R, '5L': temp_5L,
-                   '6R': cpPos(folding_pattern.point('H4')),
-                   '6L': cpPos(folding_pattern.point('G4'))}
+                   '6R': temp_6R, '6L': temp_6L,}
 
     return wrap_pivots

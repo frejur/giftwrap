@@ -17,10 +17,10 @@ _PRECISION = 3
 _FORMAT_LEN = _PRECISION + 2
 _SKIP_CHARS = ('#', '\n', 'g')
 _SKIP_STRINGS = ('vt ', 'vn ', 'vp ')
-_MAX_NUM_VERTS = 100
+_MAX_NUM_VERTS = 999
 _MIN_WIDTH_UNITS = 4
 _MIN_HEIGHT_UNITS = 3
-_MAX_WIDTH_UNITS = int(_MIN_WIDTH_UNITS * 3.0)
+_MAX_WIDTH_UNITS = int(_MIN_WIDTH_UNITS * 1.5)
 _MAX_HEIGHT_UNITS = int(_MIN_HEIGHT_UNITS * 1.2)
 _NEW_FILE_SUFFIX = '_new'
 _EMPTY_CHAR = ' '
@@ -44,9 +44,11 @@ _TOP_COMMENT = f"""\
 class GridPoint:
     index: int
     subpixels: int
-    def __init__(self, index=_NO_VTX, subpixels=0):
+    char_position: int
+    def __init__(self, index=_NO_VTX, subpixels=0, char_position=0):
         self.index = index
         self.subpixels = subpixels
+        self.char_position = char_position
 
 @dataclass
 class XY:
@@ -153,7 +155,9 @@ class ProcessedObj:
                                          self.grid_unit_height)
             self.grid[xy.y][xy.x].index = idx
             if idx > 9:
-                self.grid[xy.y][xy.x + 1].index = _VTX_IDX_RHS
+                for i in range(1, len(str(idx))):
+                    self.grid[xy.y][xy.x + i].index = _VTX_IDX_RHS
+                    self.grid[xy.y][xy.x + i].char_position = i
 
     def _extractData(self, filepath):
         """
@@ -383,7 +387,7 @@ class ProcessedObj:
                 f'Invalid state, expected "{ObjState.Finished.name}" '
                 f' but got "{self.state}"')
 
-        with open(output_file, 'w', encoding='utf-8') as outfile:
+        with (open(output_file, 'w', encoding='utf-8') as outfile):
             # Diagram
             outfile.write(f'{_TOP_COMMENT}\n#\n# Topology:\n')
             for row in self.grid:
@@ -396,7 +400,13 @@ class ProcessedObj:
                             raise RuntimeError(
                                 'The right portion of a vertex index must be at'
                                 ' a position greater than 0 (Zero)')
-                        line += str(row[ptnum - 1].index)[1]
+                        if point.char_position > len(str(_MAX_NUM_VERTS))\
+                            or point.char_position < 1:
+                            raise RuntimeError('Invalid char position')
+
+                        line += str(
+                            row[ptnum - point.char_position].index)\
+                            [point.char_position]
                     else:
                         line += str(point.index)[0]
                 outfile.write(f'# {line.rstrip()}\n')

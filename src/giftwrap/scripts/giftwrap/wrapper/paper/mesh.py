@@ -22,7 +22,7 @@ class PaperMesh:
 
         # Move pivot, translate, add thickness
         if self.thickness > 0:
-            cmds.move(0, self.thickness / 2, 0, self.mesh + '.rotatePivot',
+            cmds.move(0, self.thickness / 2, 0, f'{self.mesh}.rotatePivot',
                       relative=True)
             cmds.setAttr(self.mesh + '.translateY', -0.5 * self.thickness)
 

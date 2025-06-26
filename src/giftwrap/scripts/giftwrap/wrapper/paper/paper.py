@@ -56,6 +56,10 @@ class Paper:
                     self.folding_plane.getTransformNode())
         cmds.CreateWrap()
         wrap_base = f'{self.folding_plane.getTransformNode()}Base'
+        wrap_deformer = self._getDeformerNode(wrap_base)
+        wrap_deformer = cmds.rename(wrap_deformer,
+                                    f'wrap_{self.wrap_id}_def')
+        cmds.setAttr(f'{wrap_deformer}.exclusiveBind', 1)
         wrap_base = cmds.rename(wrap_base,
                                 f'deformer_base_{self.wrap_id}_geo')
 
@@ -205,5 +209,23 @@ class Paper:
         for key, value in {'X': x, 'Y': y, 'Z': z}.items():
             if value is not None:
                 cmds.setAttr(f'{base_path}{key}', value)
+
+    @staticmethod
+    def _getDeformerNode(base_geo_name):
+        shape_nodes = cmds.listRelatives(base_geo_name,
+                                        shapes=True, fullPath=True)
+        if len(shape_nodes) != 1:
+            raise AttributeError('Error when trying to fetch shape node'
+                                 ' of the wrap deformer base geometry'
+                                 ': Expected a single output connection but '
+                                 f'got {len(shape_nodes)}')
+
+        out_nodes = cmds.listConnections(shape_nodes[0], type='wrap',
+                                         source=False, destination=True)
+        if len(out_nodes) != 1:
+            raise AttributeError('Error when trying to fetch wrap deformer node'
+                                 ': Expected a single output connection but '
+                                 f'got {len(out_nodes)}')
+        return out_nodes[0]
 
 
