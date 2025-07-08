@@ -1,4 +1,21 @@
 from ...utils.custom_types.vec import Vec
+from dataclasses import dataclass
+from ...utils.custom_types.vec import Vec
+
+@dataclass
+class Pivot:
+    position: Vec
+    rotation: Vec
+
+    def __init__(self, position, rotation=Vec(0, 0, 0)):
+        self.position = position
+        self.rotation = rotation
+
+# Helper function to average two positions
+def _avgPos(pos1, pos2):
+    return Vec(
+        (pos1.x + pos2.x) / 2, (pos1.y + pos2.y) / 2, (pos1.z + pos2.z) / 2
+    )
 
 def calculateFoldingPivots(folding_pattern):
     """
@@ -10,68 +27,76 @@ def calculateFoldingPivots(folding_pattern):
                               and their positions.
 
     Returns:
-        A dictionary with the format { Pivot-ID : Vec, }
+        A dictionary with named Pivot objects:
+            { Fold-ID : Pivot(Position, Rotation) }
 
     Notes:
-        Pivot IDs are named based on the quadrant and the fold ordinal, e.g.
-            1U = 1st fold, upper quadrant
+        Fold IDs are named based on the fold's ordinal number and the outer
+        corner(s) of the surface being folded, e.g.
+            1_F1_I1 = 1st fold, corners F1 and I1
     """
 
-    # Helper function to average two positions
-    def avgPos(pos1, pos2):
-        return Vec(
-            (pos1.x + pos2.x) / 2, (pos1.y + pos2.y) / 2, (pos1.z + pos2.z) / 2
-        )
+    half_B = folding_pattern.getSideLength('B') / 2
+    D = folding_pattern.getSideLength('D')
+    thk = folding_pattern.getPaperThickness()
 
-    # Helper function to copy a position
-    def cpPos(pos):
-        return Vec(pos.x, pos.y, pos.z)
+    temp_pts_2 = {'F1_I1': ('F3', 'I3'),
+                  'F8_I8': ('F5', 'I5')}
+    temp_pos_2 = {}
+    for name, (pt_a, pt_b) in temp_pts_2.items():
+        temp_pos_2[name] = _avgPos(folding_pattern.point(pt_a),
+                                  folding_pattern.point(pt_b))
+        temp_pos_2[name].y += D
 
-    temp_I3_H3 = (folding_pattern.point('I3').x -
-                  folding_pattern.point('H3').x) / 2
-    temp_1U = avgPos(folding_pattern.point('I3'), folding_pattern.point('F3'))
-    temp_2U = cpPos(temp_1U)
-    temp_2U.y += (folding_pattern.point('F2').z -
-                  folding_pattern.point('F3').z) * -1
-    temp_2B = cpPos(temp_2U)
-    temp_2B.z *= -1
-    temp_3UR = cpPos(folding_pattern.point('H3'))
-    temp_3UR.x += temp_I3_H3
-    temp_3UR.z += temp_I3_H3
-    temp_3BR = cpPos(folding_pattern.point('H5'))
-    temp_3BR.x += temp_I3_H3
-    temp_3BR.z -= temp_I3_H3
-    temp_3UL = cpPos(folding_pattern.point('G3'))
-    temp_3UL.x -= temp_I3_H3
-    temp_3UL.z += temp_I3_H3
-    temp_3BL = cpPos(folding_pattern.point('G5'))
-    temp_3BL.x -= temp_I3_H3
-    temp_3BL.z -= temp_I3_H3
-    temp_4UR = cpPos(temp_3UR)
-    temp_4UR.y = temp_2U.y
-    temp_4BR = cpPos(temp_3BR)
-    temp_4BR.y = temp_2U.y
-    temp_4UL = cpPos(temp_3UL)
-    temp_4UL.y = temp_2U.y
-    temp_4BL = cpPos(temp_3BL)
-    temp_4BL.y = temp_2U.y
-    temp_5R = cpPos(folding_pattern.point('H4'))
-    temp_5R.y = temp_2U.y
-    temp_5L = cpPos(folding_pattern.point('G4'))
-    temp_5L.y = temp_2U.y
-    temp_6R = cpPos(folding_pattern.point('H4'))
-    temp_6R.x = folding_pattern.point('I4u').x
-    temp_6L = cpPos(folding_pattern.point('G4'))
-    temp_6L.x = folding_pattern.point('F4u').x
-    wrap_pivots = {'1U': temp_1U,
-                   '1B': avgPos(folding_pattern.point('I5'),
-                                folding_pattern.point('F5')),
-                   '2U': temp_2U, '2B': temp_2B,
-                   '3UR': temp_3UR, '3BR': temp_3BR, '3UL': temp_3UL,
-                   '3BL': temp_3BL,
-                   '4UR': temp_4UR, '4BR': temp_4BR, '4UL': temp_4UL,
-                   '4BL': temp_4BL,
-                   '5R': temp_5R, '5L': temp_5L,
-                   '6R': temp_6R, '6L': temp_6L,}
+    temp_offsets_3 = {'F3': ( half_B, 0,  half_B),
+                      'F2': ( half_B, D, -half_B),
+                      'I3': (-half_B, 0,  half_B),
+                      'I2': (-half_B, D, -half_B),
+                      'F5': ( half_B, 0, -half_B),
+                      'F6': ( half_B, D,  half_B),
+                      'I5': (-half_B, 0, -half_B),
+                      'I6': (-half_B, D,  half_B)}
+    temp_pos_3 = {}
+    for name, (x_offs, y_offs, z_offs) in temp_offsets_3.items():
+        pos = folding_pattern.point(name)
+        temp_pos_3[name] = Vec(pos.x + x_offs, pos.y + y_offs, pos.z + z_offs)
+
+    temp_pts_4 = {'F3': (('F1', 'G1'), thk),
+                  'F2': (('F1', 'G1'), D - thk),
+                  'I3': (('F1', 'G1'), thk),
+                  'I2': (('F1', 'G1'), D - thk),
+                  'F5': (('F1', 'G1'), thk),
+                  'F6': (('F1', 'G1'), D - thk),
+                  'I5': (('F1', 'G1'), thk),
+                  'I6': (('F1', 'G1'), D - thk)}
+    temp_pos_4 = {}
+    for name, ((pt_a, pt_b), y_offs) in temp_pts_4.items():
+        temp_pos_4[name] = _avgPos(folding_pattern.point(pt_a),
+                                  folding_pattern.point(pt_b))
+        temp_pos_4[name].y += y_offs
+
+    wrap_pivots = {'1_F1_I1': Pivot(_avgPos(folding_pattern.point('F3'),
+                                           folding_pattern.point('I3'))),
+                   '1_F8_I8': Pivot(_avgPos(folding_pattern.point('F5'),
+                                           folding_pattern.point('I5'))),
+                   '2_F1_I1': Pivot(temp_pos_2['F1_I1']),
+                   '2_F8_I8': Pivot(temp_pos_2['F8_I8']),
+                   '3_F8_I8': Pivot(Vec(0, D + thk, 0)),
+                   '3_F3':    Pivot(temp_pos_3['F3'], Vec(0,   45,  0)),
+                   '3_F2':    Pivot(temp_pos_3['F2'], Vec(0,   225, 0)),
+                   '3_F5':    Pivot(temp_pos_3['F5'], Vec(0,   45,  180)),
+                   '3_F6':    Pivot(temp_pos_3['F6'], Vec(180, 225, 180)),
+                   '3_I3':    Pivot(temp_pos_3['I3'], Vec(0,   -45, 0)),
+                   '3_I2':    Pivot(temp_pos_3['I2'], Vec(0,   135, 0)),
+                   '3_I5':    Pivot(temp_pos_3['I5'], Vec(180, 225, 0)),
+                   '3_I6':    Pivot(temp_pos_3['I6'], Vec(0,   45, 0)),
+                   '4_F3':    Pivot(temp_pos_4['F3'], Vec(0,   45,  0)),
+                   '4_F2':    Pivot(temp_pos_4['F2'], Vec(0,   225, 0)),
+                   '4_F5':    Pivot(temp_pos_4['F5'], Vec(0,   45,  180)),
+                   '4_F6':    Pivot(temp_pos_4['F6'], Vec(180, 225, 180)),
+                   '4_I3':    Pivot(temp_pos_4['I3'], Vec(0,   -45, 0)),
+                   '4_I2':    Pivot(temp_pos_4['I2'], Vec(0,   135, 0)),
+                   '4_I5':    Pivot(temp_pos_4['I5'], Vec(180, 225, 0)),
+                   '4_I6':    Pivot(temp_pos_4['I6'], Vec(0,   45, 0))}
 
     return wrap_pivots

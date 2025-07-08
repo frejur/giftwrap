@@ -15,38 +15,42 @@ class FoldingPattern:
         Notes:
             See the diagram at the bottom of this file for more details.
         """
+        self.paper_thickness = paper_thickness
+
         # y-axis
         y_gft = paper_thickness / 2
 
-        # calculate sides
-        side_a += paper_thickness
-        side_d += paper_thickness
-        gft_side_b = side_d * 0.6
-        gft_side_c = side_e / 2 + y_gft
-        side_e += paper_thickness  # needs to be run last
+        # Calculate sides
+        self.sides = {'A': side_a + paper_thickness,
+                      'D': side_d + paper_thickness,
+                      'C': side_e / 2 + y_gft,
+                      'B': (side_d + paper_thickness) * 0.6,
+                      'E': side_e + paper_thickness}
 
         # Store length of flaps
-        self.flap_length = gft_side_b
+        self.flap_length = self.sides['B']
 
         # check if folds will overlap
-        self.folds_overlap = side_e < (2 * gft_side_b)
+        self.folds_overlap = self.sides['E'] < (2 * self.sides['B'])
 
         # calculate side f
         if not self.folds_overlap:
-            gft_side_f = gft_side_c - gft_side_b
+            self.sides['F'] = self.sides['C'] - self.sides['B']
         else:
-            gft_side_f = gft_side_b - gft_side_c
+            self.sides['F'] = self.sides['B'] - self.sides['C']
+
+        bc_diff = self.sides['B'] - self.sides['C']
 
         # x-axis
-        x_h = (side_a / 2)
-        x_i = x_h + gft_side_b
+        x_h = (self.sides['A'] / 2)
+        x_i = x_h + self.sides['B']
         x_g = x_h * -1
         x_f = x_i * -1
 
         # y-axis
-        z_5 = (side_e / 2)
-        z_6 = z_5 + side_d
-        z_7 = z_6 + gft_side_c
+        z_5 = (self.sides['E'] / 2)
+        z_6 = z_5 + self.sides['D']
+        z_7 = z_6 + self.sides['C']
         z_3 = z_5 * -1
         z_2 = z_6 * -1
 
@@ -54,11 +58,11 @@ class FoldingPattern:
         if not self.folds_overlap:
             z_1 = z_7 * -1
         else:
-            z_1 = z_2 - gft_side_b
+            z_1 = z_2 - self.sides['B']
 
         # calculate z-8 axis
         if not self.folds_overlap:
-            z_8 = z_7 + gft_side_f
+            z_8 = z_7 + self.sides['F']
         else:
             z_8 = z_7
 
@@ -66,7 +70,7 @@ class FoldingPattern:
         self.gift_fold_points = {
             'F1': Vec(x_f, y_gft, z_1), 'F2': Vec(x_f, y_gft, z_2),
             'F3': Vec(x_f, y_gft, z_3),
-            'F4': Vec(x_f + gft_side_b - gft_side_c, y_gft, 0.0),
+            'F4': Vec(x_f + bc_diff, y_gft, 0.0),
             'F5': Vec(x_f, y_gft, z_5),
             'F6': Vec(x_f, y_gft, z_6),
             'F7': Vec(x_f, y_gft, z_7), 'F8': Vec(x_f, y_gft, z_8),
@@ -74,16 +78,17 @@ class FoldingPattern:
             'G2': Vec(x_g, y_gft, z_2), 'G3': Vec(x_g, y_gft, z_3),
             'G4': Vec(x_g, y_gft, 0.0),
             'G5': Vec(x_g, y_gft, z_5), 'G6': Vec(x_g, y_gft, z_6),
-            'G7': Vec(x_g, y_gft, z_7),
-            'G8': Vec(x_g, y_gft, z_8),
+            'G7': Vec(x_g - paper_thickness, y_gft, z_7),
+            'G8': Vec(x_g - paper_thickness, y_gft, z_8),
             'H1': Vec(x_h, y_gft, z_1), 'H2': Vec(x_h, y_gft, z_2),
             'H3': Vec(x_h, y_gft, z_3),
             'H4': Vec(x_h, y_gft, 0.0), 'H5': Vec(x_h, y_gft, z_5),
             'H6': Vec(x_h, y_gft, z_6),
-            'H7': Vec(x_h, y_gft, z_7), 'H8': Vec(x_h, y_gft, z_8),
+            'H7': Vec(x_h + paper_thickness, y_gft, z_7),
+            'H8': Vec(x_h + paper_thickness, y_gft, z_8),
             'I1': Vec(x_i, y_gft, z_1),
             'I2': Vec(x_i, y_gft, z_2), 'I3': Vec(x_i, y_gft, z_3),
-            'I4': Vec(x_i - gft_side_b + gft_side_c, y_gft, 0.0),
+            'I4': Vec(x_i - self.sides['B'] + self.sides['C'], y_gft, 0.0),
             'I5': Vec(x_i, y_gft, z_5), 'I6': Vec(x_i, y_gft, z_6),
             'I7': Vec(x_i, y_gft, z_7),
             'I8': Vec(x_i, y_gft, z_8), 'I4a':Vec(x_i, y_gft, z_3)
@@ -91,69 +96,69 @@ class FoldingPattern:
 
         # Diagonal folds -------------------------------------------------------
 
-        # Calculate diagonal folds F4a, F4b, I4a, I4b
-        self.gift_fold_points['I4a'].z += gft_side_b
+        # Calculate diagonal fold points F4a, F4b, I4a, I4b
+        self.gift_fold_points['I4a'].z += self.sides['B']
         self.gift_fold_points['I4b'] = Vec(x_i, y_gft, z_5)
-        self.gift_fold_points['I4b'].z -= gft_side_b
+        self.gift_fold_points['I4b'].z -= self.sides['B']
 
         self.gift_fold_points['F4a'] = Vec(x_f, y_gft, z_3)
-        self.gift_fold_points['F4a'].z += gft_side_b
+        self.gift_fold_points['F4a'].z += self.sides['B']
         self.gift_fold_points['F4b'] = Vec(x_f, y_gft, z_5)
-        self.gift_fold_points['F4b'].z -= gft_side_b
+        self.gift_fold_points['F4b'].z -= self.sides['B']
 
         # Calculate intersecting points HI4, FG4
         if self.folds_overlap:
             self.gift_fold_points['HI4'] = Vec(x_h, y_gft, 0.0)
-            self.gift_fold_points['HI4'].x += side_e / 2
+            self.gift_fold_points['HI4'].x += self.sides['E'] / 2
             self.gift_fold_points['FG4'] = Vec(x_g, y_gft, 0.0)
-            self.gift_fold_points['FG4'].x -= side_e / 2
+            self.gift_fold_points['FG4'].x -= self.sides['E'] / 2
 
-        # Calculate diagonal folds F1a, I1a
+        # Calculate diagonal fold points F1a, I1a
         if not self.folds_overlap:
             self.gift_fold_points['I1a'] = Vec(x_i, y_gft, z_2)
-            self.gift_fold_points['I1a'].z -= gft_side_b
+            self.gift_fold_points['I1a'].z -= self.sides['B']
             self.gift_fold_points['F1a'] = Vec(x_f, y_gft, z_2)
-            self.gift_fold_points['F1a'].z -= gft_side_b
+            self.gift_fold_points['F1a'].z -= self.sides['B']
         else:
             self.gift_fold_points['I1a'] = Vec(x_i, y_gft, z_1)
-            self.gift_fold_points['I1a'].z += gft_side_b - gft_side_c
-            self.gift_fold_points['I1a'].x -= gft_side_b - gft_side_c
+            self.gift_fold_points['I1a'].z += bc_diff
+            self.gift_fold_points['I1a'].x -= bc_diff
             self.gift_fold_points['F1a'] = Vec(x_f, y_gft, z_1)
-            self.gift_fold_points['F1a'].z += gft_side_b - gft_side_c
-            self.gift_fold_points['F1a'].x += gft_side_b - gft_side_c
+            self.gift_fold_points['F1a'].z += bc_diff
+            self.gift_fold_points['F1a'].x += bc_diff
 
-        # Calculate diagonal folds F1b, I1b
+        # Calculate diagonal fold points F1b, I1b
         if self.folds_overlap:
             self.gift_fold_points['I1b'] = Vec(x_i, y_gft, z_1)
-            self.gift_fold_points['I1b'].z += (gft_side_b - gft_side_c) * 2
+            self.gift_fold_points['I1b'].z += bc_diff * 2
             self.gift_fold_points['F1b'] = Vec(x_f, y_gft, z_1)
-            self.gift_fold_points['F1b'].z += (gft_side_b - gft_side_c) * 2
+            self.gift_fold_points['F1b'].z += bc_diff * 2
 
-        # Calculate diagonal folds F1c, I1c
+        # Calculate diagonal fold points F1c, I1c
         if self.folds_overlap:
             self.gift_fold_points['I1c'] = Vec(x_i, y_gft, z_1)
-            self.gift_fold_points['I1c'].x -= (gft_side_b - gft_side_c) * 2
+            self.gift_fold_points['I1c'].x -= bc_diff * 2
             self.gift_fold_points['F1c'] = Vec(x_f, y_gft, z_1)
-            self.gift_fold_points['F1c'].x += (gft_side_b - gft_side_c) * 2
+            self.gift_fold_points['F1c'].x += bc_diff * 2
 
-        # Calculate diagonal folds F7a, I7a
+        # Calculate diagonal fold points F7a, I7a
         if not self.folds_overlap:
             self.gift_fold_points['I7a'] = Vec(x_i, y_gft, z_6)
-            self.gift_fold_points['I7a'].z += gft_side_b
+            self.gift_fold_points['I7a'].z += self.sides['B']
             self.gift_fold_points['F7a'] = Vec(x_f, y_gft, z_6)
-            self.gift_fold_points['F7a'].z += gft_side_b
+            self.gift_fold_points['F7a'].z += self.sides['B']
         else:
             self.gift_fold_points['I7a'] = Vec(x_i, y_gft, z_7)
-            self.gift_fold_points['I7a'].x -= gft_side_b - gft_side_c
+            self.gift_fold_points['I7a'].x -= bc_diff
             self.gift_fold_points['F7a'] = Vec(x_f, y_gft, z_7)
-            self.gift_fold_points['F7a'].x += gft_side_b - gft_side_c
+            self.gift_fold_points['F7a'].x += bc_diff
 
-        # Calculate diagonal folds F7b, I7b
+        # Calculate diagonal fold points F7b, I7b
         if self.folds_overlap:
             self.gift_fold_points['I7b'] = Vec(x_i, y_gft, z_7)
-            self.gift_fold_points['I7b'].z -= gft_side_b - gft_side_c
+            self.gift_fold_points['I7b'].z -= bc_diff
             self.gift_fold_points['F7b'] = Vec(x_f, y_gft, z_7)
-            self.gift_fold_points['F7b'].z -= gft_side_b - gft_side_c
+            self.gift_fold_points['F7b'].z -= bc_diff
 
         # Padding folds --------------------------------------------------------
         thk = paper_thickness    # shorthand
@@ -164,49 +169,55 @@ class FoldingPattern:
                                  #     |/_________:.
                                  #         leg
 
-        # Calculate padding folds F3x, F4xu, F4xus, F4xds, F4xd, F5x
+        # Calculate padding fold points F3x, F4xu, F4xus, F4xds, F4xd, F5x
         self.gift_fold_points['F3x'] = Vec(x_g - leg, y_gft, z_3)
         self.gift_fold_points['F4xu'] = Vec(x_g - thk - leg, y_gft, z_3 + thk)
-        self.gift_fold_points['F4xus'] = Vec(x_f, y_gft, z_3 + thk + leg)
-        self.gift_fold_points['F4xds'] = Vec(x_f, y_gft, z_5 - thk - leg)
-        self.gift_fold_points['F4xu'] = Vec(x_g - thk - leg, y_gft, z_5 - thk)
+        if not self.folds_overlap:
+            z_xds = z_5 - self.sides['B'] + leg
+            z_xus = z_3 + self.sides['B'] - leg
+        else:
+            z_xds = z_3 + self.sides['B'] - leg
+            z_xus = z_5 - self.sides['B'] + leg
+        self.gift_fold_points['F4xus'] = Vec(x_f, y_gft, z_xus)
+        self.gift_fold_points['F4xds'] = Vec(x_f, y_gft, z_xds)
+        self.gift_fold_points['F4xd'] = Vec(x_g - thk - leg, y_gft, z_5 - thk)
         self.gift_fold_points['F5x'] = Vec(x_g - leg, y_gft, z_5)
 
-        # Calculate padding folds F4x, F4y, F4z
+        # Calculate padding fold points F4x, F4y, F4z
         if self.folds_overlap:
-            temp_x = x_g + side_e / 2
-            self.gift_fold_points['F4x'] = Vec(temp_x - leg, y_gft, 0.0)
-            self.gift_fold_points['F4y'] = Vec(temp_x - leg/2, y_gft, -leg/2)
-            self.gift_fold_points['F4z'] = Vec(temp_x - leg/2, y_gft, leg/2)
+            temp_xf = x_g - self.sides['E'] / 2
+            self.gift_fold_points['F4x'] = Vec(temp_xf - leg, y_gft, 0.0)
+            self.gift_fold_points['F4y'] = Vec(temp_xf - leg/2, y_gft, -leg/2)
+            self.gift_fold_points['F4z'] = Vec(temp_xf - leg/2, y_gft, leg/2)
 
-        # Calculate padding folds F4u, F4d, F4us, F4ds
+        # Calculate padding fold points F4u, F4d, F4us, F4ds
         self.gift_fold_points['F4u'] = Vec(x_g - thk, y_gft, z_3 + thk)
         self.gift_fold_points['F4d'] = Vec(x_g - thk, y_gft, z_5 - thk)
         self.gift_fold_points['F4us'] = Vec(x_f, y_gft, z_3 + thk)
         self.gift_fold_points['F4ds'] = Vec(x_f, y_gft, z_5 - thk)
 
-        # Calculate padding folds I4u, I4d, I4us, I4ds
+        # Calculate padding fold points I4u, I4d, I4us, I4ds
         self.gift_fold_points['I4u'] = Vec(x_h + thk, y_gft, z_3 + thk)
         self.gift_fold_points['I4d'] = Vec(x_h + thk, y_gft, z_5 - thk)
         self.gift_fold_points['I4us'] = Vec(x_i, y_gft, z_3 + thk)
         self.gift_fold_points['I4ds'] = Vec(x_i, y_gft, z_5 - thk)
 
-        # Calculate padding folds I3x, I4xu, I4xus, I4xds, I4xd, I5x
+        # Calculate padding fold points I3x, I4xu, I4xus, I4xds, I4xd, I5x
         self.gift_fold_points['I3x'] = Vec(x_h + leg, y_gft, z_3)
-        self.gift_fold_points['I4xu'] = Vec(x_h + thk - leg, y_gft, z_3 + thk)
-        self.gift_fold_points['I4xus'] = Vec(x_i, y_gft, z_3 + thk + leg)
-        self.gift_fold_points['I4xds'] = Vec(x_i, y_gft, z_5 - thk - leg)
-        self.gift_fold_points['I4xu'] = Vec(x_i + thk - leg, y_gft, z_5 - thk)
-        self.gift_fold_points['I5x'] = Vec(x_i + leg, y_gft, z_5)
+        self.gift_fold_points['I4xu'] = Vec(x_h + thk + leg, y_gft, z_3 + thk)
+        self.gift_fold_points['I4xus'] = Vec(x_i, y_gft, z_xus)
+        self.gift_fold_points['I4xds'] = Vec(x_i, y_gft, z_xds)
+        self.gift_fold_points['I4xd'] = Vec(x_h + thk + leg, y_gft, z_5 - thk)
+        self.gift_fold_points['I5x'] = Vec(x_h + leg, y_gft, z_5)
 
-        # Calculate padding folds I4x, I4y, I4z
+        # Calculate padding fold points I4x, I4y, I4z
         if self.folds_overlap:
-            temp_x = x_h - side_e / 2
-            self.gift_fold_points['I4x'] = Vec(temp_x + leg, y_gft, 0.0)
-            self.gift_fold_points['I4y'] = Vec(temp_x + leg/2, y_gft, -leg/2)
-            self.gift_fold_points['I4z'] = Vec(temp_x + leg/2, y_gft, leg/2)
+            temp_xi = x_h + self.sides['E'] / 2
+            self.gift_fold_points['I4x'] = Vec(temp_xi + leg, y_gft, 0.0)
+            self.gift_fold_points['I4y'] = Vec(temp_xi + leg/2, y_gft, -leg/2)
+            self.gift_fold_points['I4z'] = Vec(temp_xi + leg/2, y_gft, leg/2)
 
-        # Calculate padding folds F1u, F1d, F1s, I1u, I1d, I1u
+        # Calculate padding fold points F1u, F1d, F1s, I1u, I1d, I1u
         self.gift_fold_points['F1u'] = Vec(x_g - thk, y_gft, z_1)
         self.gift_fold_points['F1d'] = Vec(x_g - thk, y_gft, z_2 - thk)
         self.gift_fold_points['F1s'] = Vec(x_f, y_gft, z_2 - thk)
@@ -214,50 +225,94 @@ class FoldingPattern:
         self.gift_fold_points['I1d'] = Vec(x_h + thk, y_gft, z_2 - thk)
         self.gift_fold_points['I1s'] = Vec(x_i, y_gft, z_2 - thk)
 
-        # Calculate padding folds F1x, F1xd, F1xm, F1xs
-        self.gift_fold_points['F1x'] = Vec(x_g + leg, y_gft, z_2)
-        self.gift_fold_points['F1xd'] = Vec(x_g + leg, y_gft, z_2 - thk)
+        # Calculate padding fold points F2x, F1xd, F1xm, F1xs,
+        #                               I2x, I1xd, I1xm, I1xs
+        self.gift_fold_points['F2x'] = Vec(x_g - leg, y_gft, z_2)
+        self.gift_fold_points['F1xd'] = Vec(x_g - thk - leg, y_gft, z_2 - thk)
+        self.gift_fold_points['I2x'] = Vec(x_h + leg, y_gft, z_2)
+        self.gift_fold_points['I1xd'] = Vec(x_h + thk + leg, y_gft, z_2 - thk)
         if self.folds_overlap:
-            temp_x = x_f + gft_side_b - gft_side_c
-            temp_z = z_1 + gft_side_b - gft_side_c
-            self.gift_fold_points['F1xm'] = Vec(temp_x, y_gft, temp_z)
-            self.gift_fold_points['F1xm'].x -= leg/2
-            self.gift_fold_points['F1xm'].z += leg/2
+            tmp_xf = x_f + bc_diff
+            tmp_xi = x_i - bc_diff
+            tmp_z = z_1 + bc_diff + leg/2
+            self.gift_fold_points['F1xm'] = Vec(tmp_xf - leg/2, y_gft, tmp_z)
+            self.gift_fold_points['I1xm'] = Vec(tmp_xi + leg/2, y_gft, tmp_z)
 
         if self.folds_overlap:
-            self.gift_fold_points['F1xs'] = Vec(x_f, y_gft, z_1 - leg)
+            self.gift_fold_points['F1xs'] = Vec(x_f, y_gft, z_1 + leg)
+            self.gift_fold_points['I1xs'] = Vec(x_i, y_gft, z_1 + leg)
         else:
-            temp_z = z_1 + gft_side_b - gft_side_c
-            self.gift_fold_points['F1xs'] = Vec(x_f, y_gft, temp_z)
+            temp_z = z_2 - self.sides['B']
+            self.gift_fold_points['F1xs'] = Vec(x_f, y_gft, temp_z + leg)
+            self.gift_fold_points['I1xs'] = Vec(x_i, y_gft, temp_z + leg)
 
 
-        # Calculate padding folds F7u, F7s, F7d, F7m, F8d
+        # Calculate padding fold points F7u, F7s, F7d, F7m, F8d
         self.gift_fold_points['F7u'] = Vec(x_g - thk, y_gft, z_6 + thk)
         self.gift_fold_points['F7s'] = Vec(x_f, y_gft, z_6 + thk)
         if not self.folds_overlap:
-            self.gift_fold_points['F7m'] = Vec(x_g - thk, y_gft, z_7)
-            self.gift_fold_points['F8d'] = Vec(x_g - thk, y_gft, z_8)
+            self.gift_fold_points['F7m'] = Vec(x_g - thk * 2, y_gft, z_7)
+            self.gift_fold_points['F8d'] = Vec(x_g - thk * 2, y_gft, z_8)
         else:
             self.gift_fold_points['F7d'] = Vec(x_g - thk, y_gft, z_7)
 
-        # Calculate padding folds I7u, I7s, I7d, I7m, I8d
+        # Calculate padding fold points I7u, I7s, I7d, I7m, I8d
         self.gift_fold_points['I7u'] = Vec(x_h + thk, y_gft, z_6 + thk)
         self.gift_fold_points['I7s'] = Vec(x_i, y_gft, z_6 + thk)
         if not self.folds_overlap:
-            self.gift_fold_points['I7m'] = Vec(x_h + thk, y_gft, z_7)
-            self.gift_fold_points['I8d'] = Vec(x_h + thk, y_gft, z_8)
+            self.gift_fold_points['I7m'] = Vec(x_h + thk * 2, y_gft, z_7)
+            self.gift_fold_points['I8d'] = Vec(x_h + thk * 2, y_gft, z_8)
         else:
             self.gift_fold_points['I7d'] = Vec(x_h + thk, y_gft, z_7)
 
+        # Calculate padding fold points F6x, F7xu, F7xs, F7xd,
+        #                               I6x, I7xu, I7xs, I7xd
+        self.gift_fold_points['F6x'] = Vec(x_g - leg, y_gft, z_6)
+        self.gift_fold_points['F7xu'] = Vec(x_g - thk - leg, y_gft, z_6 + thk)
+        self.gift_fold_points['I6x'] = Vec(x_h + leg, y_gft, z_6)
+        self.gift_fold_points['I7xu'] = Vec(x_h + thk + leg, y_gft, z_6 + thk)
+        if not self.folds_overlap:
+            temp_z = z_6 + self.sides['B'] - leg
+            self.gift_fold_points['F7xs'] = Vec(x_f, y_gft, temp_z)
+            self.gift_fold_points['I7xs'] = Vec(x_i, y_gft, temp_z)
+        else:
+            temp_xf = x_f + bc_diff
+            temp_xi = x_i - bc_diff
+            self.gift_fold_points['F7xd'] = Vec(temp_xf - leg, y_gft, z_7)
+            self.gift_fold_points['I7xd'] = Vec(temp_xi + leg, y_gft, z_7)
+
+        # Calculate padding fold points F7xm, I7xm
+        if self.folds_overlap:
+            temp_xf = x_f + bc_diff
+            temp_xi = x_i - bc_diff
+            temp_z = z_7 - leg / 2
+            self.gift_fold_points['F7xm'] = Vec(temp_xf - leg/2, y_gft, temp_z)
+            self.gift_fold_points['I7xm'] = Vec(temp_xi + leg/2, y_gft, temp_z)
+
+        # Other points ---------------------------------------------------------
+        self.gift_fold_points['G2o'] = Vec(x_g, y_gft, z_2 + thk)
+        self.gift_fold_points['H2o'] = Vec(x_h, y_gft, z_2 + thk)
+        self.gift_fold_points['G3o'] = Vec(x_g, y_gft, z_3 - thk)
+        self.gift_fold_points['H3o'] = Vec(x_h, y_gft, z_3 - thk)
+        self.gift_fold_points['G5o'] = Vec(x_g, y_gft, z_5 + thk)
+        self.gift_fold_points['H5o'] = Vec(x_h, y_gft, z_5 + thk)
+        self.gift_fold_points['G6o'] = Vec(x_g, y_gft, z_6 - thk)
+        self.gift_fold_points['H6o'] = Vec(x_h, y_gft, z_6 - thk)
 
     def point(self, point_id):
         return self.gift_fold_points[point_id]
+
+    def getSideLength(self, side_id):
+        return self.sides[side_id]
 
     def hasOverlappingFolds(self):
         return self.folds_overlap
 
     def getFlapLength(self):
         return self.flap_length
+
+    def getPaperThickness(self):
+        return self.paper_thickness
 
 """
  FOLDING PATTERN DIAGRAM
@@ -281,17 +336,17 @@ class FoldingPattern:
        (b)-|¤    |               |    ¤|   |
            |  ¤  |<===== A =====>|  ¤  |   |
         5_ |____¤|_______________|¤____|   v
-           |     |               |     |
-           |     |       :       |     |
-           |     |               |     |
-        6_ |_____|_______________|_____|
-           |    ¤|               |¤    |
-     (a+b),|  ¤  |       :       |  ¤  |
-        7_ |%_ _ |_ _ _ _ _ _ _ _|_ _ %|  __,
-           |     |               |     |    |-- F (Only present when no overlap)
-        8_ |_____|_______________|_____|  __|
+           |     |               |     |     ^
+           |     |       :       |     |     |-- D
+           |     |               |     |     |
+        6_ |_____|_______________|_____|     v
+           |    ¤|               |¤    |   ^
+     (a+b),|  ¤  |       :       |  ¤  |   |-- C
+        7_ |%_ _ |_ _ _ _ _ _ _ _|_ _ %|   v
+           |     |               |     |     ^-- F (Only present
+        8_ |_____|_______________|_____|     v      when no overlap)
                          :
-                                 <= B =>
+           <= B =>               <= B =>
                          :
 |                                                    |
 v                        :                           v
@@ -388,7 +443,7 @@ BL quadrant <--          :             --> BR quadrant
   :  u___xu_________  _ s:    :  d___xd________ ds
   :  | .   \         :   :    :.   /          :
   :  |   .   \   .   :   :    '- x - - - - - -'
-  :  |     .   \     :   :
+  :  |     .   xm    :   :
   :  |       .   \   :   :
   '- | - - - - - - \-' 7 :
      d              xd   :

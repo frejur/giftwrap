@@ -1,9 +1,25 @@
-from _ast import pattern
-from copy import deepcopy
-
 import maya.cmds as cmds
 from .pivots import calculateFoldingPivots
 from ...utils.custom_types.vec import Vec
+
+_DIAGONAL_FOLDS_MAP = {
+    '3_F2_1': ('F1', True),
+    '3_F2_2': ('F1', False),
+    '3_F3_1': ('F3', True),
+    '3_F3_2': ('F3', False),
+    '3_I2_1': ('F1', True),
+    '3_I2_2': ('F1', False),
+    '3_I3_1': ('F3', True),
+    '3_I3_2': ('F3', False),
+    '3_F5_1': ('F5', True),
+    '3_F5_2': ('F5', False),
+    '3_F6_1': ('F6', True),
+    '3_F6_2': ('F6', False),
+    '3_I5_1': ('F5', True),
+    '3_I5_2': ('F5', False),
+    '3_I6_1': ('F6', True),
+    '3_I6_2': ('F6', False),
+}
 
 class Clusters:
     def __init__(self, folding_pattern, folding_plane, paper_mesh, wrap_id):
@@ -19,171 +35,130 @@ class Clusters:
         self.cluster_groups = {} # Used to store paths to cluster-locator groups
 
         # Create lists of rows of vertices to include in clusters
-        vertices_row_1 = self._getVerticesForRow(1)
-        vertices_row_2 = self._getVerticesForRow(2)
-        vertices_row_6 = self._getVerticesForRow(6)
-        vertices_row_7 = self._getVerticesForRow(7)
-        vertices_row_8 = self._getVerticesForRow(8) \
-                         if not self.pattern.hasOverlappingFolds() \
-                         else []
+        row_map = {'F1 until F2':    (1, 1),
+                   'F2 until F3':    (2, 2),
+                   'After I5 to I6': (6, 5),
+                   'After I6 to I7': (7, 6)}
+        row_vertices = {
+            key: self._getVerticesForRow(a) + self._getVerticesInBetweenRows(b)
+            for key, (a, b) in row_map.items()
+        }
 
-        vertices_row_1_flaps = self._getVerticesFromPoints(['F1a', 'I1a'])
-        vertices_row_1_flaps_overlap = \
-            self._getVerticesFromPoints(['F1b', 'I1b', 'F1c', 'I1c']) \
-            if self.pattern.hasOverlappingFolds() else []
-        vertices_row_1_pad = \
-            self._getVerticesFromPoints(
-                ['F1u', 'I1u', 'F1d', 'I1d', 'F1s', 'I1s'])
-        vertices_row_7_flaps = self._getVerticesFromPoints(['F7a', 'I7a'])
-        vertices_row_7_flaps_overlap = \
-            self._getVerticesFromPoints(['F7b', 'I7b']) \
-            if self.pattern.hasOverlappingFolds() else []
-        vertices_row_7_pad = \
-            self._getVerticesFromPoints(['F7u', 'I7u', 'F7s', 'I7s'])
-        vertices_row_7_pad_overlap = \
-            self._getVerticesFromPoints(['F7d', 'I7d']) \
-            if self.pattern.hasOverlappingFolds() else []
-        vertices_row_7_pad_no_overlap = \
-            self._getVerticesFromPoints(['F7m', 'I7m', 'F8d', 'I8d']) \
-            if not self.pattern.hasOverlappingFolds() else []
+        if not self.pattern.hasOverlappingFolds():
+            row_vertices['F8 to I8'] = self._getVerticesForRow(8)
 
         # 1st fold =============================================================
         # Upper
-        vertices_1U = vertices_row_1 + vertices_row_2 + \
-                      vertices_row_1_flaps + vertices_row_1_pad
-        print(vertices_1U)
-        self._addVerticesAndCreateCluster(vertices_1U, '1U',
-            new_vertices_when_overlap=vertices_row_1_flaps_overlap)
+        self._addCluster(row_vertices['F1 until F2'] +
+                         row_vertices['F2 until F3'], '1_F1_I1')
 
         # Lower
-        vertices_1B = vertices_row_6 + vertices_row_7 + \
-                      vertices_row_7_flaps + vertices_row_7_pad
-        self._addVerticesAndCreateCluster(vertices_1B, '1B',
-            new_vertices_when_overlap=vertices_row_7_flaps_overlap + \
-                                      vertices_row_7_pad_overlap,
-            new_vertices_when_no_overlap=vertices_row_8 + \
-                                         vertices_row_7_pad_no_overlap)
+        vertices_1B = (row_vertices['After I5 to I6'] +
+                       row_vertices['After I6 to I7'] +
+                       (row_vertices['F8 to I8']
+                        if not self.pattern.hasOverlappingFolds() else []))
+        self._addCluster(vertices_1B, '1_F8_I8')
 
         # 2nd fold =============================================================
-        vertices_2U = vertices_row_1 + vertices_row_1_flaps + vertices_row_1_pad
-        self._addVerticesAndCreateCluster(vertices_2U, '2U',
-            new_vertices_when_overlap=vertices_row_1_flaps_overlap)
+        self._addCluster(row_vertices['F1 until F2'], '2_F1_I1')
 
-        vertices_2B = vertices_row_7 + vertices_row_7_flaps + vertices_row_7_pad
-        if not self.pattern.hasOverlappingFolds():
-            vertices_2B += vertices_row_8
-        self._addVerticesAndCreateCluster(vertices_2B, '2B',
-            new_vertices_when_overlap=vertices_row_7_flaps_overlap + \
-                                       vertices_row_7_pad_overlap,
-            new_vertices_when_no_overlap=vertices_row_8 + \
-                                          vertices_row_7_pad_no_overlap)
+        vertices_2B = (row_vertices['After I6 to I7'] +
+                       (row_vertices['F8 to I8']
+                        if not self.pattern.hasOverlappingFolds() else []))
+        self._addCluster(vertices_2B, '2_F8_I8')
 
         # 3rd fold =============================================================
-        vertices_3UR = [self._getVertexFromPoint('I3'),
-                        self._getVertexFromPoint('I4us')]
-        self._addVerticesAndCreateClusterWithPivot(vertices_3UR,
-                                                   ['I4b'],
-                                                   '3UR',
-                                                   rotation_y=-45)
 
-        vertices_3BR = [self._getVertexFromPoint('I5'),
-                        self._getVertexFromPoint('I4ds')]
-        self._addVerticesAndCreateClusterWithPivot(vertices_3BR,
-                                                   ['I4a'],
-                                                   '3BR',
-                                                   rotation_xyz=(
-                                                       Vec(180, 225, 0)))
+        self._addCluster(row_vertices['F8 to I8'], '3_F8_I8')
 
-        vertices_3UL = [self._getVertexFromPoint('F3'),
-                        self._getVertexFromPoint('F4us')]
-        self._addVerticesAndCreateClusterWithPivot(vertices_3UL,
-                                                   ['F4b'],
-                                                   '3UL',
-                                                   rotation_y=45)
-
-        vertices_3BL = [self._getVertexFromPoint('F5'),
-                        self._getVertexFromPoint('F4ds')]
-        self._addVerticesAndCreateClusterWithPivot(vertices_3BL,
-                                                   ['F4a'],
-                                                   '3BL',
-                                                   rotation_xyz=(
-                                                       Vec(0, 45, 180)))
-
-        # 4th fold =============================================================
-        vertices_4UR = [self._getVertexFromPoint('I2'),
-                        self._getVertexFromPoint('I1s')]
-        self._addVerticesAndCreateClusterWithPivot(vertices_4UR,
-                                                   ['I1b', 'I7'],
-                                                   '4UR',
-                                                   rotation_y=135)
-
-        vertices_4BR = [self._getVertexFromPoint('I6'),
-                        self._getVertexFromPoint('I7s')]
-        self._addVerticesAndCreateClusterWithPivot(vertices_4BR,
-                                                   ['I7b', 'I7', 'I1'],
-                                                   '4BR',
-                                                   rotation_y=45)
-
-        vertices_4UL = [self._getVertexFromPoint('F2'),
-                        self._getVertexFromPoint('F1s')]
-        self._addVerticesAndCreateClusterWithPivot(vertices_4UL,
-                                                   ['F1b', 'F7'],
-                                                   '4UL',
-                                                   rotation_y=225)
-
-        vertices_4BL = [self._getVertexFromPoint('F6'),
-                        self._getVertexFromPoint('F7s')]
-        self._addVerticesAndCreateClusterWithPivot(vertices_4BL,
-                                                   ['F7b', 'F7', 'F1'],
-                                                   '4BL',
-                                                   rotation_xyz=(
-                                                       Vec(180, 225, 180)))
-
-        # 5th fold =============================================================
-        vertices_5R = self._getVerticesFromPoints(['I7', 'I1', 'I1a', 'I7a'])
-        vertices_5R_when_overlap = \
-            self._getVerticesFromPoints(['I7b', 'I1b', 'I1c']) \
-            if self.pattern.hasOverlappingFolds() \
-            else []
-        vertices_5R_when_no_overlap = \
-            self._getVerticesFromPoints(['I8']) \
-            if self.pattern.hasOverlappingFolds() \
-            else []
-
-        self._addVerticesAndCreateCluster(vertices_5R, '5R',
-            new_vertices_when_no_overlap=vertices_5R_when_no_overlap,
-            new_vertices_when_overlap=vertices_5R_when_overlap)
-
-        vertices_5L = self._getVerticesFromPoints(['F7', 'F1', 'F1a', 'F7a'])
-        vertices_5L_when_overlap = \
-            self._getVerticesFromPoints(['F7b', 'F1b', 'F1c']) \
-                if self.pattern.hasOverlappingFolds() \
-                else []
-        vertices_5L_when_no_overlap = \
-            self._getVerticesFromPoints(['F8']) \
-                if self.pattern.hasOverlappingFolds() \
-                else []
-
-        self._addVerticesAndCreateCluster(vertices_5L, '5L',
-            new_vertices_when_no_overlap=vertices_5L_when_no_overlap,
-            new_vertices_when_overlap=vertices_5L_when_overlap)
-
-        # 6th fold =============================================================
-        vertices_6R = self._getVerticesFromPoints(['I4a', 'I4b'])
-        vertices_6R_when_overlap = self._getVerticesFromPoints(['HI4']) \
-                                   if self.pattern.hasOverlappingFolds() \
-                                   else []
-
-        self._addVerticesAndCreateCluster( vertices_6R, '6R',
-            new_vertices_when_overlap=vertices_6R_when_overlap)
-
-        vertices_6L = self._getVerticesFromPoints(['F4a', 'F4b'])
-        vertices_6L_when_overlap = self._getVerticesFromPoints(['FG4']) \
-            if self.pattern.hasOverlappingFolds() \
-            else []
-
-        self._addVerticesAndCreateCluster(vertices_6L, '6L',
-            new_vertices_when_overlap=vertices_6L_when_overlap)
+        # self._addVerticesAndCreateClusterWithPivot(
+        #     self._getVerticesFromPoints(pts_3UR_pad), '3UR', rotation_y=-45)
+        #
+        # vertices_3BR = [self._getVertexFromPoint('I5'),
+        #                 self._getVertexFromPoint('I4ds')]
+        # self._addVerticesAndCreateClusterWithPivot(vertices_3BR,
+        #                                            '3BR',
+        #                                            rotation_xyz=(
+        #                                                Vec(180, 225, 0)))
+        #
+        # vertices_3UL = [self._getVertexFromPoint('F3'),
+        #                 self._getVertexFromPoint('F4us')]
+        # self._addVerticesAndCreateClusterWithPivot(vertices_3UL,
+        #                                            '3UL',
+        #                                            rotation_y=45)
+        #
+        # vertices_3BL = [self._getVertexFromPoint('F5'),
+        #                 self._getVertexFromPoint('F4ds')]
+        # self._addVerticesAndCreateClusterWithPivot(vertices_3BL,
+        #                                            '3BL',
+        #                                            rotation_xyz=(
+        #                                                Vec(0, 45, 180)))
+        #
+        # # 4th fold =============================================================
+        # vertices_4UR = [self._getVertexFromPoint('I2'),
+        #                 self._getVertexFromPoint('I1s')]
+        # self._addVerticesAndCreateClusterWithPivot(vertices_4UR,
+        #                                            '4UR',
+        #                                            rotation_y=135)
+        #
+        # vertices_4BR = [self._getVertexFromPoint('I6'),
+        #                 self._getVertexFromPoint('I7s')]
+        # self._addVerticesAndCreateClusterWithPivot(vertices_4BR,
+        #                                            '4BR',
+        #                                            rotation_y=45)
+        #
+        # vertices_4UL = [self._getVertexFromPoint('F2'),
+        #                 self._getVertexFromPoint('F1s')]
+        # self._addVerticesAndCreateClusterWithPivot(vertices_4UL,
+        #                                            '4UL',
+        #                                            rotation_y=225)
+        #
+        # vertices_4BL = [self._getVertexFromPoint('F6'),
+        #                 self._getVertexFromPoint('F7s')]
+        # self._addVerticesAndCreateClusterWithPivot(vertices_4BL,
+        #                                            '4BL',
+        #                                            rotation_xyz=(
+        #                                                Vec(180, 225, 180)))
+        #
+        # # 5th fold =============================================================
+        # vertices_5R = self._getVerticesFromPoints(['I7', 'I1', 'I1a', 'I7a'])
+        # vertices_5R_when_overlap = \
+        #     self._getVerticesFromPoints(['I7b', 'I1b', 'I1c']) \
+        #     if self.pattern.hasOverlappingFolds() \
+        #     else []
+        # vertices_5R_when_no_overlap = \
+        #     self._getVerticesFromPoints(['I8']) \
+        #     if self.pattern.hasOverlappingFolds() \
+        #     else []
+        #
+        # self._addCluster(vertices_5R, '5R')
+        #
+        # vertices_5L = self._getVerticesFromPoints(['F7', 'F1', 'F1a', 'F7a'])
+        # vertices_5L_when_overlap = \
+        #     self._getVerticesFromPoints(['F7b', 'F1b', 'F1c']) \
+        #         if self.pattern.hasOverlappingFolds() \
+        #         else []
+        # vertices_5L_when_no_overlap = \
+        #     self._getVerticesFromPoints(['F8']) \
+        #         if self.pattern.hasOverlappingFolds() \
+        #         else []
+        #
+        # self._addCluster(vertices_5L, '5L')
+        #
+        # # 6th fold =============================================================
+        # vertices_6R = self._getVerticesFromPoints(['I4a', 'I4b'])
+        # vertices_6R_when_overlap = self._getVerticesFromPoints(['HI4']) \
+        #                            if self.pattern.hasOverlappingFolds() \
+        #                            else []
+        #
+        # self._addCluster(vertices_6R, '6R')
+        #
+        # vertices_6L = self._getVerticesFromPoints(['F4a', 'F4b'])
+        # vertices_6L_when_overlap = self._getVerticesFromPoints(['FG4']) \
+        #     if self.pattern.hasOverlappingFolds() \
+        #     else []
+        #
+        # self._addCluster(vertices_6L, '6L')
 
         # Grouping =============================================================
 
@@ -220,37 +195,8 @@ class Clusters:
     # Helpers
     # ==========================================================================
 
-    def _addVerticesAndCreateCluster(self, vertices_base,
-                                     cluster_id,
-                                     new_vertices_when_no_overlap=None,
-                                     new_vertices_when_overlap=None):
-        """
-        Helper for creating clusters.
-
-        Args:
-            vertices_base:                List of vertices to use as a base.
-            cluster_id:                   The cluster ID.
-            new_vertices_when_no_overlap: List of new vertices to add only when
-                                          folds DON't overlap.
-            new_vertices_when_overlap:    List of new vertices to add only when
-                                          folds overlap.
-
-        Modifies:
-            `self.handles` (See `self._addCluster`)
-        """
-        vertices = deepcopy(vertices_base) # TODO: Check if this is necessary
-
-        if (not self.pattern.hasOverlappingFolds() and
-            new_vertices_when_no_overlap is not None):
-            vertices += new_vertices_when_no_overlap
-        if (self.pattern.hasOverlappingFolds() and
-            new_vertices_when_overlap is not None):
-            vertices += new_vertices_when_overlap
-
-        self._addCluster(vertices, cluster_id)
-
-    def _addVerticesAndCreateClusterWithPivot(self, vertices_base,
-                                              new_vertices_when_overlap,
+    def _addVerticesAndCreateClusterWithPivot(self,
+                                              vertex_paths,
                                               cluster_id,
                                               rotation_y=None,
                                               rotation_xyz=None):
@@ -258,30 +204,35 @@ class Clusters:
         Helper for creating cluster-pivot groups.
 
         Args:
-            vertices_base:             List of vertices to use as a base.
-            new_vertices_when_overlap: List of new vertices to add when folds
-                                       overlap.
-            cluster_id:                The cluster ID.
-            rotation_y:                The rotation angle in degrees for Y.
-            rotation_xyz:              The rotation angle in degrees for X,Y,Z.
+            vertex_paths: List of vertex paths to include in the cluster.
+            cluster_id:     The cluster ID.
+            rotation_y:     The rotation angle in degrees for Y.
+            rotation_xyz:   The rotation angle in degrees for X,Y,Z.
 
         Modifies:
             `self.pivot_locators` and `self.groups`
-            (See `self._addClusterWithPivot')
+            (See `self._addClusterWithPivot`)
         """
-        vertices = deepcopy(vertices_base) # TODO: Check if this is necessary
+        if len(vertex_paths) == 0:
+            raise RuntimeError(f'Cluster "{cluster_id}" cannot be created: '
+                               'No vertex indices provided')
 
-        if (self.pattern.hasOverlappingFolds() and
-            new_vertices_when_overlap is not None):
-            for point in new_vertices_when_overlap:
-                vertices.append(self._getVertexFromPoint(point))
-
+        self._validateRotParms(rotation_y, rotation_xyz)
         if rotation_y is not None:
-            self._addClusterWithPivot(vertices, cluster_id,
-                                      rotation_y=rotation_y)
+            self._addClusterWithPivot(vertex_paths, cluster_id,
+                                      rotation_y=rotation_y,
+                                      skip_rotation_validation=True)
         else:
-            self._addClusterWithPivot(vertices, cluster_id,
-                                      rotation_xyz=rotation_xyz)
+            self._addClusterWithPivot(vertex_paths, cluster_id,
+                                      rotation_xyz=rotation_xyz,
+                                      skip_rotation_validation=True)
+
+    @staticmethod
+    def _validateRotParms(rotation_y, rotation_xyz):
+        if (rotation_y is not None and rotation_xyz is not None) or \
+                (rotation_y is None and rotation_xyz is None):
+            raise RuntimeError(
+                'Must provide either rotation_y or rotation_xyz')
 
     def _addCluster(self, vertices, cluster_id):
         """
@@ -299,7 +250,8 @@ class Clusters:
         )
         new_handle = cmds.rename(new_handle,
                                  f'cluster_{cluster_id}_handle_{self.wrap_id}')
-        cmds.xform(new_handle, rotatePivot=list(self.pivot_xyz[cluster_id]))
+        cmds.xform(new_handle,
+                   rotatePivot=list(self.pivot_xyz[cluster_id].position))
 
         if cluster_id in self.handles:
             raise ValueError(f"Duplicate cluster ID detected: {cluster_id}")
@@ -307,24 +259,26 @@ class Clusters:
         self.handles[cluster_id] = new_handle
 
     def _addClusterWithPivot(self, vertices, cluster_id,
-                             rotation_xyz=None, rotation_y=None):
+                             rotation_xyz=None, rotation_y=None,
+                             skip_rotation_validation=False):
         """
         Helper function to create a group with a cluster, and a locator
         that serves as the cluster's local pivot point.
 
         Args:
-            vertices: A list of vertex paths.
-            cluster_id: The cluster ID.
-            rotation_y: The rotation angle in degrees for Y.
-            rotation_xyz: The rotation angle in degrees for X,Y,Z.
+            vertices:                 A list of vertex paths.
+            cluster_id:               The cluster ID.
+            rotation_y:               The rotation angle in degrees for Y.
+            rotation_xyz:             The rotation angle in degrees for X,Y,Z.
+            skip_rotation_validation: If True, skip validation of rotation
+                                      angles.
 
         Modifies:
             Stores the pivot point locator in `self.pivot_locators`
             Stores the new group in `self.groups`
         """
-        if ((rotation_xyz is None and rotation_y is None) or
-            (rotation_xyz is not None and rotation_y is not None)):
-            raise ValueError('Must specify either rotation_xyz or rotation_y')
+        if not skip_rotation_validation:
+            self._validateRotParms(rotation_y, rotation_xyz)
 
         base_name = f'cluster_{cluster_id}'
 
@@ -374,6 +328,17 @@ class Clusters:
                 f'Could not find fold point {point} in folding plane'
             )
 
+    def _getVertexFromIndex(self, index):
+        """
+        Helper function to get the vertex path for the given index.
+
+        Args:
+            index:  Vertex index
+        Returns:
+            The path to the vertex.
+        """
+        return f'{self.plane_transform}.vtx[{index}]'
+
     def _getVerticesFromPoints(self, points):
         """
         Helper function to get the vertex paths for the given folding points.
@@ -391,12 +356,48 @@ class Clusters:
     def _getVerticesForRow(self, row_index):
         """
         Helper function to get a list of vertex paths for a row.
-        """
-        row_letters = ['F', 'G', 'H', 'I']
-        vertices = []
 
-        for letter in row_letters:
-            point = f'{letter}{row_index}'
-            vertices.append(self._getVertexFromPoint(point))
+        Args:
+            row_index:  The row index (1-based indexing)
+        Returns:
+            A list of vertex paths.
+        """
+        vertices = []
+        for idx in self.plane.getRowVertices(row_index):
+            vertices.append(self._getVertexFromIndex(idx))
+
+        return vertices
+
+    def _getVerticesInBetweenRows(self, row_index):
+        """
+        Helper function to get a list of vertex paths for the gap between rows.
+
+        Args:
+            row_index: The row index (1-based indexing), e.g. row=1 returns the
+                       vertices in the gap between row 1 and row 2.
+        Returns:
+            A list of vertex paths.
+        """
+        vertices = []
+        for idx in self.plane.getVerticesInBetweenRows(row_index):
+            vertices.append(self._getVertexFromIndex(idx))
+
+        return vertices
+
+    def _getVerticesForDiagonalFold(self, fold_id):
+        """
+        Helper function to get a list of vertex paths for the given diagonal
+        fold.
+
+        Args:
+            fold_id: The row index (1-based indexing), e.g. row=1 returns the
+                       vertices in the gap between row 1 and row 2.
+        Returns:
+            A list of vertex paths.
+        """
+        vertices = []
+        for idx in self.plane.getVerticesForDiagonalFold(
+                *_DIAGONAL_FOLDS_MAP[fold_id]):
+            vertices.append(self._getVertexFromIndex(idx))
 
         return vertices

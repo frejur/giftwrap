@@ -1,4 +1,5 @@
 import maya.cmds as cmds
+from math import atan, degrees
 from .folding_pattern import FoldingPattern
 from .folding_plane import FoldingPlane
 from .mesh import PaperMesh
@@ -48,6 +49,7 @@ class Paper:
         )
         self.mesh = None
         self.folding_plane = FoldingPlane(self.pattern, self.wrap_id)
+
         self.mesh = PaperMesh(self.folding_plane, self.thickness, self.wrap_id)
 
         # Create Wrap Deformer (Paper mesh conforms to Folding plane)
@@ -87,15 +89,21 @@ class Paper:
             fold_number: The fold number
         """
         self.fold_number = self._validFoldNumber(fold_number)
+        angle_2_F8_I8 = 0
+        if not self.pattern.hasOverlappingFolds():
+            angle_2_F8_I8 = degrees(atan(self.getThickness() /
+                                 (self.pattern.getSideLength('E') / 2)))
 
         if fold_number >= 1:
-            self._setClusterRotate('1B', x=-90)
+            self._setClusterRotate('1_F1_I1', x=90)
         if fold_number >= 2:
-            self._setClusterRotate('2B', x=-90)
+            self._setClusterRotate('1_F8_I8', x=-90)
         if fold_number >= 3:
-            self._setClusterRotate('1U', x=90)
+            self._setClusterRotate('2_F1_I1', x=90)
         if fold_number >= 4:
-            self._setClusterRotate('2U', x=89.8)
+            self._setClusterRotate('2_F8_I8', x=- (90 - angle_2_F8_I8))
+        if fold_number >= 5:
+            self._setClusterRotate('3_F8_I8', x=-angle_2_F8_I8)
         if fold_number >= 5:
             self._setClusterRotate('3UL', x=178.8)
             self._setClusterTranslate('3UL', x=self.fold_fix, y=0, z=0)
@@ -181,6 +189,9 @@ class Paper:
     def getUnwrappedBackRightCorner(self):
         return self.pattern.point('I1')
 
+    def getThickness(self):
+        return self.pattern.getPaperThickness()
+
     # Helpers ==================================================================
 
     @staticmethod
@@ -192,8 +203,8 @@ class Paper:
     def _getClusterPath(self, cluster_id):
         return (
             self.clusters.getClusterHandle(cluster_id)
-            if (cluster_id[0] != '3' and cluster_id[0] != '4')
-            else self.clusters.getPivotLocator(cluster_id)
+            # if (cluster_id[0] != '3' and cluster_id[0] != '4')
+            # else self.clusters.getPivotLocator(cluster_id)
         )
 
     def _setClusterTranslate(self, cluster_id, x=None, y=None, z=None):

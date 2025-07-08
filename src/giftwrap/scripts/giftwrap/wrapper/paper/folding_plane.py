@@ -4,7 +4,12 @@ import os
 
 from .folding_pattern import *
 from .map.map_box import _BOX_MAPPINGS
+from .map.map_box import _BOX_ROW_VERTICES
+from .map.map_box import _BOX_IN_BETWEEN_ROWS_VERTICES
+from .map.map_box import _BOX_DIAGONAL_FOLD_VERTICES
 from .map.map_box_overlap import _BOX_OVERLAP_MAPPINGS
+from .map.map_box_overlap import _BOX_OVERLAP_ROW_VERTICES
+from .map.map_box_overlap import _BOX_OVERLAP_IN_BETWEEN_ROWS_VERTICES
 
 class TemplateType(Enum):
     Box = auto()
@@ -16,14 +21,28 @@ _OBJ_TEMPLATES = {
     TemplateType.Box: {
         'Name'    : '_template_box_geo',
         'Mappings': _BOX_MAPPINGS,
+        'Rows': _BOX_ROW_VERTICES,
+        'In-between rows': _BOX_IN_BETWEEN_ROWS_VERTICES,
+        'Diagonals': _BOX_DIAGONAL_FOLD_VERTICES,
         'Filepath': os.path.join(_OBJ_DIR, 'template_box.obj')
     },
     TemplateType.BoxWithOverlappingFolds: {
         'Name'    : '_template_box_overlap_geo',
         "Mappings": _BOX_OVERLAP_MAPPINGS,
+        'Rows': _BOX_OVERLAP_ROW_VERTICES,
+        'In-between rows': _BOX_OVERLAP_IN_BETWEEN_ROWS_VERTICES,
+        'Diagonals': {}, # TODO
         'Filepath': os.path.join(_OBJ_DIR, 'template_box_overlap.obj')
     },
 }
+
+print('Templates')
+print('No overlap------------------------------------------------')
+print(_OBJ_TEMPLATES[TemplateType.Box]['Rows'])
+print(_OBJ_TEMPLATES[TemplateType.Box]['In-between rows'])
+print('Overlap------------------------------------------------')
+print(_OBJ_TEMPLATES[TemplateType.BoxWithOverlappingFolds]['Rows'])
+print(_OBJ_TEMPLATES[TemplateType.BoxWithOverlappingFolds]['In-between rows'])
 
 class FoldingPlane:
     def __init__(self, pattern, wrap_id):
@@ -57,7 +76,9 @@ class FoldingPlane:
         for fold_point, vtx in template['Mappings'].items():
             self._alignVertex(vtx, fold_point)
 
-        print(self.vertices)
+        self.row_vertices =             template['Rows']
+        self.in_between_rows_vertices = template['In-between rows']
+        self.diagonal_fold_vertices =   template['Diagonals']
 
     # Getters ==================================================================
 
@@ -66,6 +87,47 @@ class FoldingPlane:
 
     def getVertex(self, fold_point):
         return self.vertices[fold_point]
+
+    def getRowVertices(self, row):
+        """
+        Helper function to retrieve all vertex indexes for a given row.
+        Args:
+            row: Row index (1-based indexing)
+        Returns:
+            A list of vertex indexes.
+        """
+        if row < 1 or row > len(self.row_vertices):
+            raise IndexError('Invalid row index (Indexing must be 1-based)')
+        return self.row_vertices[row - 1]
+
+    def getDiagonalFoldVertices(self, fold_id, include_padding_vertices=False):
+        """
+        Helper function to retrieve vertices for the given diagonal fold.
+        Args:
+            fold_id:                  The ID of the diagonal fold.
+            include_padding_vertices: If True, includes vertices for padding
+                                      folds (See 'folding_pattern.py' for more
+                                      details)
+        Returns:
+            A list of vertex indexes.
+        """
+        return self.diagonal_fold_vertices[fold_id +
+                                           ' pad' if include_padding_vertices
+                                            else '']
+
+    def getVerticesInBetweenRows(self, row):
+        """
+        Helper function to retrieve all vertex indexes in the gap between the
+        given row and the next one.
+        Args:
+            row: Row index (1-based indexing). E.g. row=1 returns vertices
+                 between row 1 and row 2.
+        Returns:
+            A list of vertex indexes.
+        """
+        if row < 1 or row > len(self.in_between_rows_vertices):
+            raise IndexError('Invalid row index (Indexing must be 1-based)')
+        return self.in_between_rows_vertices[row - 1]
 
     def _vtxPath(self, vertex_id):
         """
